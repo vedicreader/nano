@@ -1,0 +1,36 @@
+import re
+from fastcore.all import patch, ifnone, Path, L
+from functools import wraps
+from time import time
+
+__all__ = ['init_js_then_use', 'get_usr_ini', 'loadX', 'clean_dev', 'rm_special', 'arun']
+
+def init_js_then_use(script_src:str, pkg_name_in_js:str, js_code:str):
+    from fasthtml.common import Script, Surreal
+    js = '''function d(){%s};if(typeof %s === 'undefined'){me('script[src*="%s"]').on('load', ev=> {d();});}else{d();}'''
+    return Script(src=script_src), Surreal(js % (js_code, pkg_name_in_js, script_src))
+
+def get_usr_ini(usr=None, default='A'):
+    if not usr or not isinstance(usr, dict): return default
+    return usr.get('display_name', default)[0] or default
+
+def minjs(js:str): from rjsmin import jsmin; return jsmin(js)
+def mincss(js:str): from rcssmin import cssmin; return cssmin(js)
+def loadX(fn:Path, kw=None, pattern=r'__(\w+)__',minify=True):
+    fn=Path(fn)
+    sa=fn.read_text()
+    if kw: import re; sa = re.sub(pattern, lambda m: kw.get(m.group(1), m.group(0)), sa)
+    if minify: sa = minjs(sa) if fn.suffix == '.js' else mincss(sa) if fn.suffix == '.css' else sa
+    return sa
+
+def clean_dev(text): return re.sub(r'[।॥०-९a-zA-Z().\*\s+]', ' ', text).strip()
+def rm_special(q: str) -> str: return re.sub(r'[^\w\s]|[।॥०-९.]', '', q, flags=re.UNICODE).strip()
+
+def arun(coro:callable) -> any:
+    'Run an async coroutine from sync code, even if already inside an event loop'
+    import asyncio
+    try: asyncio.get_running_loop()
+    except RuntimeError: return L(asyncio.run(coro))
+    # We're in a running loop → use a temporary loop in a thread
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor() as pool: return L(pool.submit(asyncio.run, coro).result())

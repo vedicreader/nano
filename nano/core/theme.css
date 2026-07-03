@@ -1,0 +1,188 @@
+:root {
+  --neo-shadow-offset: 1px;
+  --neo-border-width: 1px;
+  --neo-thick-border-width: 3px;
+  --neo-radius: 4px;
+  --neo-shadow-color: color-mix(in srgb, #000000 80%, transparent);
+  --neo-border-color: hsl(var(--border));
+  --neo-background: hsl(var(--background));
+  --grid-color: rgba(128, 128, 128, 0.1);
+  --grid-size: 32px;
+  --muted-border-color: hsl(var(--ring));
+  --font-sans: Playfair Display,serif;
+  --font-serif: Libre Baskerville, Noto Sans Tamil, Noto Serif Telugu, Noto Serif Kannada, Noto Serif Malayalam, Noto Serif Devanagari, serif;
+  --font-mono: Fira Code, monospace;
+}
+
+.dark{
+    --neo-shadow-color: hsl(var(--border));
+    --grid-color: rgba(255, 255, 255, 0.1);
+  }
+
+body {
+    font-family: var(--font-serif), serif;
+    letter-spacing: var(--tracking-normal);
+}
+
+/* Neo-brutalism Theme */
+.neo-brutalism {
+  /* Buttons */
+  .uk-btn:not(.uk-btn-link):not(.uk-btn-ghost) {
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    box-shadow: var(--neo-shadow-offset) var(--neo-shadow-offset) 0 var(--neo-shadow-color);
+    transition: all 0.2s ease;
+    position: relative;
+    &:hover {
+      transform: translate(var(--neo-shadow-offset), var(--neo-shadow-offset));
+      box-shadow: 0 0 0 var(--neo-shadow-color);
+    }
+    &.selected {box-shadow: 0 0 0 var(--neo-shadow-color);border-width: var(--neo-border-width);}
+  }
+  .uk-btn-icon {
+    &.selected {border: var(--neo-border-width) solid var(--neo-border-color);}
+    border-radius: 100px;
+    box-shadow: none !important;
+  }
+  /* Form inputs */
+  .uk-input,.uk-select, .uk-textarea {
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    background: var(--neo-background);
+    -webkit-appearance: none;
+    &:focus {border-bottom-width: var(--neo-thick-border-width);}
+  }
+
+  /* Headers */
+  h1, h2{
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border: var(--neo-border-width) dotted var(--neo-border-color);
+    box-shadow: var(--neo-shadow-offset) var(--neo-shadow-offset) 0 var(--neo-shadow-color);
+    background: var(--neo-background);
+    font-style: italic;
+    font-weight: 300;
+  }
+  /* Links */
+  .uk-link,a {text-decoration: none;transition: all 0.2s ease;}
+}
+
+#auto-mode-btn,#dark-mode-btn,#light-mode-btn{display: none;}
+.auto #auto-mode-btn {display: block !important;}
+.dark:not(.auto) #dark-mode-btn {display: block !important;}
+.light:not(.auto) #light-mode-btn {display: block !important;}
+
+#sm-font-btn,#lg-font-btn,#xl-font-btn {display: none;}
+.uk-font-sm #sm-font-btn {display: block !important;}
+.uk-font-base #lg-font-btn {display: block !important;}
+.uk-font-lg #xl-font-btn {display: block !important;}
+
+.text-danger {color: hsl(var(--destructive));}
+.muted-border {border-color: var(--muted-border-color) !important;}
+@keyframes blink {50% { border-color: transparent; }}
+.blink {animation: blink 1.5s step-end infinite;}
+@keyframes slide-up {from {opacity:0;transform: translateY(100%);} to {opacity:1;transform: translateY(0);}}
+.slide-up {animation: slide-up 0.3s ease-in-out;}
+.figma-board {
+  position: relative;
+  min-height: calc(100vh - 300px);
+  background-image: radial-gradient(circle, var(--grid-color) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  background-position: 0px 0px;
+}
+.figma-board::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--grid-color) 1px, transparent 1px);
+  background-size: calc(var(--grid-size) / 4) calc(var(--grid-size) / 4);
+  pointer-events: none;
+}
+.active .line{
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.uk-nav > li.uk-active > a {
+  --uk-nav-item-bg: hsl(var(--accent));
+  --uk-nav-item-color: hsl(var(--accent-foreground));
+}
+
+/* Command: alternate background for even items */
+.uk-nav-secondary > li:nth-child(even) > a {background: hsl(var(--muted) / 0.7);}
+#trans-select div.uk-modal-dialog {margin: 0 auto !important;}
+/* Command: improve list item copy and flow */
+.uk-nav-secondary > li > a {
+  font-size: 1rem;
+  line-height: 0.85rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  letter-spacing: 0.01em;
+  border-radius: 0;
+  transition: background 0.15s;
+}
+.uk-cmd-header-esc {display: none !important;}
+.uk-nav-secondary > li > a:hover {background: hsl(var(--accent) / 0.18);}
+.uk-cmd-item-text {padding-left: 0.25em;font-weight: 400;}
+
+.tamil {font-family: Noto Sans Tamil, serif}
+.malayalam {font-family: Noto Serif Malayalam, serif}
+.telugu {font-family: Noto Serif Telugu, serif}
+.kannada {font-family: Noto Serif Kannada, serif}
+.devanagari {font-family: Noto Serif Devanagari, serif}
+.bengali {font-family: Noto Serif Bengali, serif}
+.gurmukhi {font-family: Noto Serif Gurmukhi, serif}
+.grantha {font-family: Noto Serif Grantha, serif;}
+
+.uk-font-lg {
+    --uk-global-font-size: 1.2rem;
+    --uk-global-line-height: 1.5rem;
+    --uk-global-font-size-s: 1rem;
+    --uk-global-line-height-s: 1.2rem
+}
+
+.htmx-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 100%;
+    background: var(--muted-border-color);
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    z-index: 10;
+}
+
+.htmx-request .htmx-indicator {
+    opacity: 1;
+}
+
+/* Custom classes for lyrics lines */
+.lyrics-line {
+  @apply w-full transition-all;
+  font-weight: 400;
+}
+
+.lyrics-line.active .line{
+  font-weight: 800;
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.lyrics-line.audio-mode {
+  @apply opacity-50;
+}
+
+.lyrics-line.audio-mode.active {
+  @apply opacity-100;
+}
+
+.lyrics-line.audio-mode.viewed {
+  @apply opacity-95;
+}
+
+.hide {
+  display: none !important;
+}
+
+html.dark{.inout{filter: invert(1) hue-rotate(180deg);}}
