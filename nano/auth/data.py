@@ -183,7 +183,7 @@ class Register(Login):
         return form(Step.em_ver, self.email) if not err else form(Step.reg, self.email, self.name, err=err)
 
     def catch(self):
-        err = reqd_chk(vars(self))
+        err = reqd_chk({k: v for k, v in vars(self).items() if k != 'next'})
         if err: return err
         em_or_err = em_chk(self.email)
         if isinstance(em_or_err, AppErr): return em_or_err
