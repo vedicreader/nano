@@ -2,6 +2,8 @@
 
 A FastHTML + MonsterUI web app starter for serverless deployments. Powers [vedicreader.com](https://vedicreader.com/).
 
+Runs on Vercel's Python runtime with [Turso](https://turso.tech) (libSQL) as the database — no file IO at runtime, so it fits a read-only serverless filesystem. Locally it falls back to plain SQLite files, zero setup. The data layer is [fastsql](https://github.com/AnswerDotAI/fastsql) (same MiniDataAPI surface as fastlite) over the [sqlalchemy-libsql](https://github.com/tursodatabase/sqlalchemy-libsql) dialect.
+
 Clone it, connect your blocks, ship it.
 
 ## Getting started
@@ -21,7 +23,7 @@ uv run python main.py   # http://localhost:5001
 | `uv run nano-setup` | init gheasy config, git-lfs patterns, `.env.example`, deploy workflow, install skills |
 | `uv run nano-skill` | (re)install `SKILL.md` into `.claude/skills/nano/` and `.agents/skills/nano/`         |
 | `uv run nano-push` | push values from `.env` to GitHub Actions secrets/vars (use `--dry-run` to preview)   |
-| `uv run nano-deploy` | vercel deploy (`compose` \| `deploy` \| `nuke` \| `env`)                            |
+| `uv run nano-deploy` | vercel + turso deploy (`compose` \| `deploy` \| `turso` \| `seed` \| `env` \| `nuke`) |
 
 ## How it works
 
@@ -37,7 +39,7 @@ Each block exposes a `connect(app)` function that registers routes, seeds data, 
 
 ## What's included
 
-**core** handles config, logging, caching, scheduled jobs, backups, and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.
+**core** handles config, the database factory (Turso in prod, SQLite in dev), and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.
 
 **auth** covers email/password registration with Resend verification, Google OAuth, and GitHub OAuth. One `connect()` call sets up all routes and session middleware. Route paths are overridable via `RouteOverrides`.
 
@@ -59,11 +61,18 @@ nano/
 │   ├── blog/            # blog block
 │   └── core/            # config, cache, logging, backups, UI
 ├── data/
-│   ├── db/              # SQLite databases
-│   ├── logs/
-│   └── cache/           # DiskCache
+│   └── db/              # local SQLite databases (dev only; prod uses Turso)
 └── static/
 ```
+
+## Database
+
+Each block gets its own database via `nano.core.get_db(name)`:
+
+- **dev** (no `TURSO_URL_*` env): a local SQLite file at `data/db/{name}.db`
+- **prod**: Turso over libsql, from `TURSO_URL_{NAME}` (e.g. `TURSO_URL_AUTH=sqlite+libsql://nano-auth-org.turso.io?secure=true`) plus `TURSO_AUTH_TOKEN`
+
+`nano-deploy deploy` creates the Turso group, one database per block, and an auth token, and writes these values to `.env` for you. Set `JWT_SCRT` explicitly in production — without it every cold start mints a new secret and invalidates all sessions.
 
 ## Auth setup
 
@@ -106,18 +115,20 @@ The dev toolchain that ships with nano:
 - **[kosha](https://github.com/vedicreader/kosha)** — indexes your repo and installed packages into a hybrid search + call graph database. Agents query it before writing code.
 - **[fossick](https://github.com/vedicreader/fossick)** — get structured information from the web
 
-`deploy.py` in the repo deploys the code to vercel
-
 ## Deployment
 
-nano is an ASGI app. `deploy.py` uses dockeasy + vpseasy + cfeasy for a full Hetzner + Cloudflare tunnel deploy:
+nano is an ASGI app; `main.py` exports `app`, which Vercel's Python runtime serves directly. `deploy.py` uses the [Vercel Python SDK](https://pypi.org/project/vercel/) and the [Turso Platform API](https://docs.turso.tech/api-reference/introduction) for a full serverless deploy:
 
 ```bash
-uv run nano-deploy deploy    # provisions VPS, wires tunnel, deploys
-uv run nano-deploy compose   # generate docker-compose.yml only
-uv run nano-deploy nuke      # delete VPS and tunnel (irreversible)
+uv run nano-deploy deploy    # turso group/DBs/token, seed posts, vercel project/env/deploy
+uv run nano-deploy compose   # generate vercel.json only
+uv run nano-deploy turso     # provision turso resources and write conn strings to .env
+uv run nano-deploy seed      # seed blog posts into turso (runs per deploy, not per cold start)
+uv run nano-deploy nuke      # delete vercel project and turso DBs (irreversible)
 uv run nano-push             # push .env values to GitHub Actions
 ```
+
+Credentials it needs in `.env` (scaffolded by `nano-setup`): `VERCEL_TOKEN`, `TURSO_API_TOKEN`, `TURSO_ORG`, plus the app secrets. `nano-deploy deploy` is idempotent: it ensures the Turso group and per-block databases exist, mints a group auth token, seeds the blog, upserts the app env vars on the Vercel project (deploy-side credentials are never pushed to the runtime), uploads the files, and creates a production deployment. Pushing to `main` runs the same thing via `.github/workflows/deploy.yml`.
 
 The app runs at [nano.sankalpa.sh](https://nano.sankalpa.sh)
 

@@ -1,7 +1,7 @@
 import time
 from fasthtml.common import dataclass, Redirect, Div, partition
-from fastlite import NotFoundError
-from nano.core import slug, base, not_found, RouteOverrides
+from fastsql import NotFoundError
+from nano.core import slug, base, not_found, not_prod, RouteOverrides
 from nano.blog.data import posts, seed_posts
 from nano.blog.ui import blog_hero, post_list, post_detail, new_post_form, showcase_cta
 from .cfg import Routes, cfg
@@ -37,7 +37,8 @@ def blog_post_get(req, slug: str, auth):
     return _scaf(req, v, auth, title=post['title'])
 
 def connect(app):
-    seed_posts(cfg.posts_seed_force)
+    # in production posts are seeded once per deploy (deploy.py), not per cold start
+    if not_prod(): seed_posts(cfg.posts_seed_force)
     app.get(Routes.base)(blog_index)
     app.get('/')(blog_index)
     RouteOverrides.skip += Routes.skip

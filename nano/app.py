@@ -27,7 +27,9 @@ hdrs = [
 
 def nf(req, exc): return not_found()
 kw,exh = {'class': 'hidden', 'hx-ext': 'preload', 'hx-boost': 'true'}, {404: nf, 500: nf, 403: nf}
-nano, rt = fast_app(hdrs=hdrs, bodykw=kw, live=not_prod(), title=cfg.app_nm, exts='preload', exception_handlers=exh)
+# secret_key stops fast_app writing .sesskey — the filesystem is read-only on Vercel
+nano, rt = fast_app(hdrs=hdrs, bodykw=kw, live=not_prod(), title=cfg.app_nm, exts='preload', exception_handlers=exh,
+                    secret_key=cfg.jwt_scrt)
 
 # connect your blocks
 b.connect(nano)

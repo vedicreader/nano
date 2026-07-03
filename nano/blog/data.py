@@ -1,18 +1,15 @@
 from fastcore.all import L
-from nano.core.cfg import database, get_db_pth
+from nano.core.cfg import get_db
 from nano.blog.cfg import cfg
 
 __all__ = ['blog_db', 'posts', 'seed_posts']
 
 
-def blog_db(path=None):
-    from fastcore.all import ifnone
-    path = ifnone(path, get_db_pth('blog'))
-    db = database(path)
+def blog_db():
+    db = get_db('blog')
     db.t.posts.create(slug=str, title=str, summary=str, body=str, author_id=int, author_name=str, visibility=str,
         created_at=float, updated_at=float, layout=str, pk='slug', if_not_exists=True, transform=True,
         not_null={'title', 'body', 'visibility'}, defaults=dict(visibility='public', layout='single'))
-    db.t.posts.create_index(['slug'], unique=True, if_not_exists=True)
     return db
 
 _db   = blog_db()
@@ -45,4 +42,4 @@ _seeds = L(cfg.posts_dir.glob('*.md')).sorted().map(_parse_md)
 
 def seed_posts(force=False):
     ex = L(posts(select='slug')).map(lambda r: r['slug'])
-    [posts.insert(p, replace=True) for p in _seeds if force or p['slug'] not in ex]
+    [posts.upsert(p) for p in _seeds if force or p['slug'] not in ex]

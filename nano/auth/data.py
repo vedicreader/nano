@@ -2,9 +2,9 @@ from fasthtml.common import Beforeware, Redirect, threaded
 import ujson as json
 from email_validator import validate_email, EmailNotValidError, EmailSyntaxError, EmailUndeliverableError
 from fasthtml.oauth import *
-from fastlite import Table, NotFoundError
+from fastsql import NotFoundError
 import hashlib, hmac, time, jwt, re
-from nano.core import landing, placeholder, send_email, email_template, database, home
+from nano.core import landing, placeholder, send_email, email_template, get_db as core_get_db, create_index, home
 from .ui import *
 from .cfg import *
 g_oath = git_oath = None
@@ -36,20 +36,19 @@ class Status(StrEnum): pending, active, suspended, deleted = 'pending', 'active'
 class TokenT(StrEnum): em_verify, pwd_reset, access_tkn = 'email_verification', 'password_reset', 'access_token'
 
 def get_db():
-    _db = database(cfg.db)
+    _db = core_get_db('auth')
     u,ct = _db.t.users, _db.t.confirmation_tokens
-    CT = 'CURRENT_TIMESTAMP'
     u.create(id=int, email=str, password_hash=bytes, phone_number=str, status=str, display_name=str,
              avatar_url=str, auth_provider=str, provider_user_id=str, last_active_at=float, preferences=str,
              created_at=float, updated_at=float, pk='id', if_not_exists=True, transform=True,
              not_null={'email', 'status', 'display_name', 'auth_provider'},
-             defaults=dict(status=Status.pending, created_at=CT, updated_at=CT, last_active_at=CT, preferences=json.dumps(dict()), auth_provider='local'))
+             defaults=dict(status=Status.pending, created_at=time.time, updated_at=time.time, last_active_at=time.time, preferences=json.dumps(dict()), auth_provider='local'))
 
     ct.create(user_id=int, token=str, type=str, validated=bool, created_at=float, transform=True, pk=['user_id', 'type'], if_not_exists=True,
-              not_null={'user_id', 'token', 'type'}, defaults={'type': TokenT.em_verify, 'created_at': time.time()})
+              not_null={'user_id', 'token', 'type'}, defaults={'type': TokenT.em_verify, 'created_at': time.time})
 
-    u.create_index(['email'], unique=True, if_not_exists=True)
-    u.create_index(['provider_user_id', 'auth_provider'], unique=True, if_not_exists=True)
+    create_index(_db, 'users', ['email'])
+    create_index(_db, 'users', ['provider_user_id', 'auth_provider'])
     return _db
 
 db = get_db()
@@ -99,7 +98,7 @@ def auth_ok(req):
 
 def get_token(uid, typ=TokenT.em_verify):
     tok = jwt.encode(dict(uid=uid, typ=typ), cfg.jwt_scrt, 'HS256')
-    return confirmation_tokens.insert(dict(user_id=uid, type=typ, token=tok), replace=True) and tok
+    return confirmation_tokens.upsert(dict(user_id=uid, type=typ, token=tok, validated=False, created_at=time.time())) and tok
 
 def reqd_chk(attrs: dict) -> AppErr | None:
     fields = [nm for nm, v in attrs.items() if not v]
@@ -119,7 +118,7 @@ def pw_chk(pwd, conf_pwd) -> AppErr | None:
     if not re.search('[!@#$%^&*(),.?\":{}|<>]', pwd): errs.append('Password must contain a special character')
     return AppErr(', '.join(errs), ['password', 'confirm_password']) if errs else None
 
-def tok_chk(tok, consume=True) -> AppErr | Table:
+def tok_chk(tok, consume=True):
     if not tok: return InvalidToken
     try:
         ct = confirmation_tokens.selectone(where='token=?', where_args=[tok])

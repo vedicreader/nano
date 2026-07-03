@@ -1,0 +1,43 @@
+name: deploy
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      MODE: ${{ vars.MODE }}
+      DOMAIN: ${{ vars.DOMAIN }}
+      TOKEN_EXP: ${{ vars.TOKEN_EXP }}
+      JWT_SCRT: ${{ secrets.JWT_SCRT }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      WANT_GOOGLE: ${{ vars.WANT_GOOGLE }}
+      WANT_GIT: ${{ vars.WANT_GIT }}
+      GOOGLE_CLI: ${{ secrets.GOOGLE_CLI }}
+      GOOGLE_SCRT: ${{ secrets.GOOGLE_SCRT }}
+      GIT_CLI: ${{ secrets.GIT_CLI }}
+      GIT_SCRT: ${{ secrets.GIT_SCRT }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+      VERCEL_PROJECT: ${{ vars.VERCEL_PROJECT }}
+      TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
+      TURSO_ORG: ${{ vars.TURSO_ORG }}
+      TURSO_GROUP: ${{ vars.TURSO_GROUP }}
+      TURSO_GROUP_LOCATION: ${{ vars.TURSO_GROUP_LOCATION }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      TURSO_URL_AUTH: ${{ vars.TURSO_URL_AUTH }}
+      TURSO_URL_BLOG: ${{ vars.TURSO_URL_BLOG }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Deploy
+        run: uv run python deploy.py deploy

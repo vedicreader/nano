@@ -1,11 +1,10 @@
 from fasthtml.oauth import GoogleAppClient, GitHubAppClient
 from fasthtml.common import StrEnum, dataclass, AttrDictDefault, str2bool
 import os
-from nano.core import cfg as core_cfg, AppErr, get_db_pth, RouteOverrides
+from nano.core import cfg as core_cfg, AppErr, RouteOverrides
 
 cfg = core_cfg
-cfg.update(AttrDictDefault(db=get_db_pth('auth'),
-                           want_google=str2bool(os.getenv('WANT_GOOGLE', 'true')),
+cfg.update(AttrDictDefault(want_google=str2bool(os.getenv('WANT_GOOGLE', 'true')),
                            want_github=str2bool(os.getenv('WANT_GIT', 'false')),
                            g_cli_id=os.getenv('GOOGLE_CLI',''),
                            g_cli_scrt=os.getenv('GOOGLE_SCRT',''),
