@@ -5,7 +5,7 @@ from fastcore.xml import *
 from monsterui.all import *
 from monsterui.franken import render_md, FrankenRenderer, Iframe
 from nano.blog.data import posts
-from nano.core import RouteOverrides
+from nano.core import RouteOverrides, init_js_then_use
 from nano.blog.cfg import Routes
 
 class BlogRenderer(FrankenRenderer):
@@ -251,32 +251,25 @@ def _hljs():
     hjc  = 'https://cdn.jsdelivr.net/gh/arronhunt/highlightjs-copy@latest/dist'
     dark_href  = f'{base}/styles/atom-one-dark.min.css'
     light_href = f'{base}/styles/atom-one-light.min.css'
+    init = (f"const _hd='{dark_href}',_hl='{light_href}',_he=document.getElementById('hljs-theme');"
+            "function _st(){if(_he)_he.href=document.documentElement.classList.contains('dark')?_hl:_hd;}"
+            "_st();"
+            "new MutationObserver(_st).observe(document.documentElement,{attributes:true,attributeFilter:['class']});"
+            "hljs.addPlugin(new CopyButtonPlugin());"
+            "htmx.onLoad(hljs.highlightAll);")
     return [
         Link(id='hljs-theme', rel='stylesheet', href=dark_href),
         Script(src=f'{base}/highlight.min.js'),
         Script(src=f'{base}/languages/python.min.js'),
-        Script(src=f'{hjc}/highlightjs-copy.min.js'),
         Link(rel='stylesheet', href=f'{hjc}/highlightjs-copy.min.css'),
         Style('code.hljs{display:block;padding:1.25rem;border-radius:.75rem;font-size:.875rem;line-height:1.625;overflow-x:auto}'
               'pre:has(>code.hljs){background:transparent!important;padding:0!important;margin:0!important}'),
-        Script(f"""
-const _hd='{dark_href}',_hl='{light_href}',_he=document.getElementById('hljs-theme');
-function _st(){{if(_he)_he.href=document.documentElement.classList.contains('dark')?_hl:_hd;}}
-_st();
-new MutationObserver(_st).observe(document.documentElement,{{attributes:true,attributeFilter:['class']}});
-hljs.addPlugin(new CopyButtonPlugin());
-htmx.onLoad(hljs.highlightAll);
-""", type='module'),
-    ]
-
-_NP_STYLE = Style(
-    '.np-body{column-count:1}'
-    '@media(min-width:768px){'
-    '  .np-body{column-count:2;column-gap:2.5rem}'
-    '  .np-body p,.np-body h2,.np-body h3,.np-body h4,.np-body ul,.np-body ol{break-inside:avoid}'
-    '  .np-body h2,.np-body h3,.np-body h4{break-before:avoid}'
-    '}'
-)
+        *init_js_then_use(f'{hjc}/highlightjs-copy.min.js', 'CopyButtonPlugin', init),
+        ]
+_NP_STYLE= Style('''.np-body{column-count:1} @media(min-width:768px){
+.np-body{column-count:2;column-gap:2.5rem}.np-body p,.np-body h2,.np-body h3,.np-body h4,.np-body ul,
+.np-body ol{break-inside:avoid}.np-body h2,.np-body h3,.np-body h4{break-before:avoid}}
+''')
 
 def post_detail(post, usr=None):
     if post['visibility'] == 'members' and not usr: return locked_teaser(post)
@@ -301,23 +294,21 @@ def new_post_form(err_msg=None):
     heading = H1('Write a post', cls='mb-8 tracking-tight')
     err = P(err_msg, cls='text-danger text-sm') if err_msg else None
 
-    return Section(
-        Div(back, heading,
-            Form(err,
-                LabelInput('Title', id='title', placeholder='What did you build, learn, or break?'),
-                LabelInput('Summary', id='summary', placeholder='One sentence. What should readers expect?'),
-                LabelTextArea('Body', id='body', rows=14, placeholder='Write in Markdown.', input_cls='font-mono text-xs'),
-                LabelSelect(
-                    Option('Public: anyone can read', value='public', selected=True),
-                    Option('Members only: requires sign-in', value='members'),
-                    label='Visibility', id='visibility', name='visibility'),
-                Div(
-                    Button('Publish', cls=[ButtonT.primary, ButtonT.sm]),
-                    A('Cancel', href='/blog', cls=f'uk-btn {ButtonT.ghost} {ButtonT.sm}'),
-                    cls='flex gap-3 pt-2'),
-                cls='space-y-5 max-w-2xl mx-auto',
-                hx_post='/blog/new', hx_target='#main-content'),
-            cls='px-4 py-12'))
+    return Section(Div(back, heading,
+        Form(err,
+            LabelInput('Title', id='title', placeholder='What did you build, learn, or break?'),
+            LabelInput('Summary', id='summary', placeholder='One sentence. What should readers expect?'),
+            LabelTextArea('Body', id='body', rows=14, placeholder='Write in Markdown.', input_cls='font-mono text-xs'),
+            LabelSelect(
+                Option('Public: anyone can read', value='public', selected=True),
+                Option('Members only: requires sign-in', value='members'),
+                label='Visibility', id='visibility', name='visibility'),
+            Div(
+                Button('Publish', cls=[ButtonT.primary, ButtonT.sm]),
+                A('Cancel', href='/blog', cls=f'uk-btn {ButtonT.ghost} {ButtonT.sm}'),
+                cls='flex gap-3 pt-2'),
+            cls='space-y-5 max-w-2xl mx-auto',
+            hx_post='/blog/new', hx_target='#main-content'),cls='px-4 py-12'))
 
 
 # ── Showcase CTA ──────────────────────────────────────────────────────────────
@@ -331,23 +322,18 @@ def showcase_cta(usr=None):
 
     if usr:
         cta = Div(
-            P(f'You\'re signed in as {usr["display_name"]}. This is your blog now.',
-              cls=f'{TextT.sm} mb-4'),
-            A('Write your first post', href=Routes.new, cls=f'uk-btn {ButtonT.primary} {ButtonT.sm}'),
-            cls='text-center')
+            P(f'You\'re signed in as {usr["display_name"]}. This is your blog now.', cls=f'{TextT.sm} mb-4'),
+            A('Write your first post', href=Routes.new, cls=f'{ButtonT.primary} {ButtonT.sm}'), cls='text-center')
     else:
         cta = Div(
-            P('Sign in with Google and this becomes your blog. Same code, your content.',
-              cls=f'{TextT.sm} mb-4'),
+            P('Sign in with Google and this becomes your blog. Same code, your content.', cls=f'{TextT.sm} mb-4'),
             A('Sign in with Google', hx_get=f'{RouteOverrides.lgn}?next=/blog',
-              hx_target='body', hx_swap='beforeend', cls=f'uk-btn {ButtonT.primary} {ButtonT.sm}'),
-            cls='text-center')
+              hx_target='body', hx_swap='beforeend', cls=f'{ButtonT.primary} {ButtonT.sm}'), cls='text-center')
 
     return Section(
         Card(CardBody(
             H2('lego is the template', cls='mb-2 text-center tracking-tight'),
-            P('8 packages. 2 years. One side project that kept growing.',
-              cls=f'{TextT.sm} text-center'),
+            P('8 packages. 2 years. One side project that kept growing.',cls=f'{TextT.sm} text-center'),
             pkg_badges,
             P('Each package started as a problem in a side project. lego wraps the ones you need for a '
               'production-ready web app: auth, caching, backups, theming, this blog.',

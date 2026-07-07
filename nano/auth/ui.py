@@ -1,10 +1,10 @@
-from fastcore.xml import A, Div, P, Span, Br, Input
+from fastcore.xml import A, Div, P, Span, Br, Input, Script, o
 from fasthtml.components import Uk_input_pin
 from monsterui.all import Modal
 from monsterui.franken import H3, Button, Form, LabelInput, H4, UkIcon, TextT, ButtonT
 from .cfg import Routes, AppErr, Step, EmailNotVerified
 from nano.core import typewriter
-from nano.core.cfg import cfg as s
+from nano.core.cfg import cfg as s, RouteOverrides
 
 FORM_CLS = 'uk-form-stacked space-y-6 uk-form-sm'
 LINK_CLS = 'uk-btn-text'
@@ -12,12 +12,16 @@ ERR_CLS = f'text-danger mt-2 {TextT.italic}'
 
 def err_cls(err, *fields): return [f' text-danger' if err and f in err.fields else '' for f in fields]
 def _form(post, kids): return Form(*kids, cls=FORM_CLS, hx_post=post, hx_target='#auth-container', hx_trigger='submit')
-def _err_div(err): return Div(*[P(e, cls=f'text-danger {TextT.italic}') for e in err.msg.split(', ')], cls=TextT.break_) if err else None
+def _err_div(err): return Div(*[P(e, cls=ERR_CLS) for e in err.msg.split(', ')], cls=TextT.break_) if err else None
 
-def _back_to_login(txt='Back to Login'):
-    return P(
-        A(txt, cls=LINK_CLS, hx_get=f'{Routes.auth_modal}?step={Step.login}', hx_target='#auth-container', hx_swap='outerHTML', hx_trigger='click'),
-        cls=f'{TextT.center} uk-margin-remove')
+def _back_to_login(txt='Back to Login', home=False):
+    kw = dict(href=RouteOverrides.home) if home else dict(hx_target='#auth-container', hx_swap='outerHTML',
+        hx_get=f'{Routes.auth_modal}?step={Step.login}', hx_trigger='click')
+    return P(A(txt, cls=LINK_CLS, **kw), cls=f'{TextT.center} uk-margin-remove')
+
+def _go_home(msg):
+    o = Script('setTimeout(()=>location.href="%s",1500)' % RouteOverrides.home)
+    return Div(P(msg, cls=TextT.center), o, cls='space-y-6')
 
 def EmailPasswordField(email='', err: AppErr=None, email_ph='shiva.subramaniyam@example.com', pwd_ph='Password'):
     e_lbl_cls, pw_lbl_cls = err_cls(err, 'email', 'password')
@@ -109,20 +113,14 @@ def password_reset_sent_form(email, *args):
         P('Please check your inbox and follow the instructions to reset your password.'),
         _back_to_login(), cls=FORM_CLS)
 
-def password_reset_success_form(*args):
-    return Div(
-        P('Password reset successfully! Redirecting to login...', cls=TextT.center),
-        cls='space-y-6', hx_get=f'{Routes.auth_modal}?step={Step.login}', hx_trigger='load delay:2s')
+def password_reset_success_form(*args): return _go_home('Password reset successfully! Redirecting...')
 
 def email_verify_form(email, *args):
     return Div(
         P(f'Verification email sent to ', cls=TextT.center), Span(email, cls=TextT.bold),
         P('Please check your inbox and click the verification link.', cls='uk-text-muted text-center uk-wrap'))
 
-def email_verified_form(*args):
-    return Div(P('Email verified successfully! Redirecting...', cls=TextT.center), cls='space-y-6',
-               hx_get=f'{Routes.auth_modal}?step=login', hx_trigger='load delay:2s',
-               hx_target='#auth-container', hx_swap='outerHTML', hx_replace_url='/')
+def email_verified_form(*args): return _go_home('Email verified successfully! Redirecting...')
 
 def verify_error_form(email, err, *args):
     return Form(H4('Verification Failed', cls='uk-text-center text-xl font-semibold uk-margin-medium-top'),
@@ -133,7 +131,7 @@ def verify_error_form(email, err, *args):
                 P(A('Resend verification email', cls='uk-btn-primary',
                     hx_get=f'{Routes.resend_verification}?email={email}' if email else f'{Routes.auth_modal}?step={Step.login}',
                     hx_target='#auth-container'), cls='uk-text-center uk-margin-medium-top'),
-                _back_to_login(), cls=FORM_CLS)
+                _back_to_login('Go Home?', home=True), cls=FORM_CLS)
 
 def amodal(content, title=s.app_sh):
     ftr = P(s.ftr_txt, cls='text-xs mt-4')

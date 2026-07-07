@@ -49,7 +49,7 @@ def showcase(auth):
     return landing(c)
 
 # add default routes. the blocks can override these. the first in line wins.
-# lego.get('/')(showcase)
+nano.get('/')(showcase)
 nano.get('/health')(lambda req: JSONResponse({'status': 'ok'}))
 
 def launch(): serve('nano', 'nano', port=cfg.port)
