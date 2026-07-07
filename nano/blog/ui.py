@@ -1,7 +1,7 @@
-import html
+import html, re
 from collections import Counter
 from datetime import datetime
-from fasthtml.common import *
+from fastcore.xml import *
 from monsterui.all import *
 from monsterui.franken import render_md, FrankenRenderer, Iframe
 from nano.blog.data import posts

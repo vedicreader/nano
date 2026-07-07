@@ -1,5 +1,8 @@
 import time
-from fasthtml.common import dataclass, Redirect, Div, partition
+from dataclasses import dataclass
+from fasthtml.core import Redirect
+from fastcore.xml import  Div
+from fastcore.basics import partition
 from fastlite import NotFoundError
 from nano.core import slug, base, not_found, RouteOverrides
 from nano.blog.data import posts, seed_posts

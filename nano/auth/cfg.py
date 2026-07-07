@@ -1,5 +1,6 @@
 from fasthtml.oauth import GoogleAppClient, GitHubAppClient
-from fasthtml.common import StrEnum, dataclass, AttrDictDefault, str2bool
+from fastcore.basics import StrEnum, AttrDictDefault, str2bool
+from dataclasses import dataclass
 import os
 from nano.core import cfg as core_cfg, AppErr, get_db_pth, RouteOverrides
 

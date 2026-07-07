@@ -1,6 +1,8 @@
 import ujson as json
-from fasthtml.common import *
+from fastcore.xml import *
 from fastcore.net import urlread
+from fasthtml.xtend import On, Now, Surreal
+from fastcore.all import timed_cache, ifnone, NotStr, globtastic, Path, AttrDict
 from itertools import islice, cycle
 from monsterui.all import *
 from monsterui.foundations import *

@@ -1,4 +1,4 @@
-from fasthtml.common import A, Div, P, Span, Br, Input
+from fastcore.xml import A, Div, P, Span, Br, Input
 from fasthtml.components import Uk_input_pin
 from monsterui.all import Modal
 from monsterui.franken import H3, Button, Form, LabelInput, H4, UkIcon, TextT, ButtonT

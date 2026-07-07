@@ -1,5 +1,5 @@
 from .data import *
-from fasthtml.common import Response
+from fasthtml.starlette import Response
 from nano.core import home, RouteOverrides
 
 async def ok(req): return Response(status_code=200) if auth_ok(req) else Response(status_code=401)

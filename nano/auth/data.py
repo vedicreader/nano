@@ -1,7 +1,8 @@
-from fasthtml.common import Beforeware, Redirect, threaded
+from fasthtml.core import Beforeware, Redirect
 import ujson as json
 from email_validator import validate_email, EmailNotValidError, EmailSyntaxError, EmailUndeliverableError
-from fasthtml.oauth import *
+from fastcore.parallel import threaded
+from fasthtml.oauth import OAuth
 from fastlite import Table, NotFoundError
 import hashlib, hmac, time, jwt, re
 from nano.core import landing, placeholder, send_email, email_template, database, home

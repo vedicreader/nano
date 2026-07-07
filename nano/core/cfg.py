@@ -2,8 +2,9 @@ import hashlib as hl
 import logging
 import os
 import secrets
-from fasthtml.common import Redirect, FT, dataclass
-from fastcore.all import threaded, AttrDictDefault, str2bool, str2int, startthread, to_xml, Path
+from dataclasses import dataclass
+from fasthtml.core import Redirect
+from fastcore.all import threaded, AttrDictDefault, str2bool, str2int, startthread, to_xml, Path, FT
 from litesearch import database
 
 __all__ = ['cfg', 'database', 'AppErr', 'home', 'send_email', 'RouteOverrides', 'get_pth', 'get_db_pth', 'in_static', 'get_db_dir', 'not_prod', 'slug']
