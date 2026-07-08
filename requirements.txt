@@ -1,0 +1,12 @@
+email-validator>=2.3.0
+fastcore>=1.13.9
+fastsql>=2.1.2
+monsterui>=1.0.46
+pyjwt>=2.13.0
+python-fasthtml>=0.14.4
+rcssmin>=1.2.2
+resend>=2.32.2
+rjsmin>=1.2.5
+sqlalchemy-libsql>=0.2.0
+ujson>=5.13.0
+vercello @ git+https://github.com/vedicreader/vercello@claude/vercel-deployment-caching-ipy0zl

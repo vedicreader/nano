@@ -16,7 +16,11 @@ dependencies = [
     "rjsmin>=1.2.5",
     "sqlalchemy-libsql>=0.2.0",
     "ujson>=5.13.0",
+    "vercello",
 ]
+
+[tool.uv.sources]
+vercello = { git = "https://github.com/vedicreader/vercello", branch = "claude/vercel-deployment-caching-ipy0zl" }
 
 [dependency-groups]
 dev = [

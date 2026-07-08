@@ -1,0 +1,26 @@
+# runtime state
+.sesskey
+data/
+backups/
+.env
+.env.*
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# vercel
+.vercel/
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
