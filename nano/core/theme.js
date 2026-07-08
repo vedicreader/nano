@@ -72,7 +72,7 @@ document.addEventListener('uk-theme-switcher:change', (e) => {
     if (k === 'theme') setTheme(v);if (k === 'radii') setRadii(v);
     if (k === 'shadows') setShadows(v); if (k === 'font') setFont(v);});
 });
-_.defer(setup);
+_.delay(setup,50);
 function* cycle(...items) {
   while(true)
     yield* items;

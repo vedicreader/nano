@@ -5,11 +5,16 @@ import secrets
 from dataclasses import dataclass
 from fasthtml.core import Redirect
 from fastcore.all import threaded, AttrDictDefault, str2bool, str2int, startthread, to_xml, Path, FT
-from litesearch import database
+from fastsql import Database, database as fdb
 
-__all__ = ['cfg', 'database', 'AppErr', 'home', 'send_email', 'RouteOverrides', 'get_pth', 'get_db_pth', 'in_static', 'get_db_dir', 'not_prod', 'slug']
+__all__ = ['cfg', 'database', 'AppErr', 'home', 'send_email', 'RouteOverrides', 'get_pth', 'get_db_pth', 'in_static',
+           'get_db_dir', 'not_prod', 'slug']
 
-# === Paths ===
+def database(path=None, **kw):
+    if not path and not isinstance(path, (str, Path)): return None
+    if not Path(path).exists(): Path(path).parent.mkdir(parents=True,exist_ok=True)
+    return fdb(path or cfg.db, **kw)
+
 data_root, backups, static = Path('data'), Path('backups'), Path('static')
 def get_pth(nm, sf='', mk=False):
     p = data_root / sf / nm

@@ -1,10 +1,10 @@
 from fasthtml.core import Beforeware, Redirect
 import ujson as json
 from email_validator import validate_email, EmailNotValidError, EmailSyntaxError, EmailUndeliverableError
-from fastcore.all import threaded, filter_keys, in_, not_
+from fastcore.all import threaded, filter_keys, in_, not_, patch
 from fasthtml.oauth import OAuth
-from fastlite import Table, NotFoundError
-import hashlib, hmac, time, jwt, re
+from fastsql import DBTable as Table, NotFoundError
+import hashlib, hmac, time, jwt, re, sqlalchemy as sa
 from nano.core import landing, placeholder, send_email, email_template, database, home
 from .ui import *
 from .cfg import *
@@ -36,18 +36,27 @@ def setup_oath(app):
 class Status(StrEnum): pending, active, suspended, deleted = 'pending', 'active', 'suspended', 'deleted'
 class TokenT(StrEnum): em_verify, pwd_reset, access_tkn = 'email_verification', 'password_reset', 'access_token'
 
+@patch
+def create_index(self:Table, columns, unique=False, if_not_exists=True, name=None):
+    "Create an index on `columns` (fastlite-compatible shim over SQLAlchemy)."
+    cols = [self.table.c[c] for c in columns]
+    name = name or f"idx_{self.table.name}_{'_'.join(columns)}"
+    sa.Index(name, *cols, unique=unique).create(self.db.engine, checkfirst=if_not_exists)
+
 def get_db():
     _db = database(cfg.db)
     u,ct = _db.t.users, _db.t.confirmation_tokens
-    CT = 'CURRENT_TIMESTAMP'
+    CT = time.time  # fastsql passes this callable to sa.Column(default=...), evaluated per-insert
     u.create(id=int, email=str, password_hash=bytes, phone_number=str, status=str, display_name=str,
              avatar_url=str, auth_provider=str, provider_user_id=str, last_active_at=float, preferences=str,
              created_at=float, updated_at=float, pk='id', if_not_exists=True, transform=True,
              not_null={'email', 'status', 'display_name', 'auth_provider'},
-             defaults=dict(status=Status.pending, created_at=CT, updated_at=CT, last_active_at=CT, preferences=json.dumps(dict()), auth_provider='local'))
+             defaults=dict(status=Status.pending, created_at=CT, updated_at=CT, last_active_at=CT,
+                           preferences=json.dumps(dict()), auth_provider='local'))
 
-    ct.create(user_id=int, token=str, type=str, validated=bool, created_at=float, transform=True, pk=['user_id', 'type'], if_not_exists=True,
-              not_null={'user_id', 'token', 'type'}, defaults={'type': TokenT.em_verify, 'created_at': time.time()})
+    ct.create(user_id=int, token=str, type=str, validated=bool, created_at=float, transform=True,
+              pk=['user_id', 'type'], if_not_exists=True, not_null={'user_id', 'token', 'type'},
+              defaults={'type': TokenT.em_verify, 'created_at': CT})
 
     u.create_index(['email'], unique=True, if_not_exists=True)
     u.create_index(['provider_user_id', 'auth_provider'], unique=True, if_not_exists=True)
@@ -100,7 +109,7 @@ def auth_ok(req):
 
 def get_token(uid, typ=TokenT.em_verify):
     tok = jwt.encode(dict(uid=uid, typ=typ), cfg.jwt_scrt, 'HS256')
-    return confirmation_tokens.insert(dict(user_id=uid, type=typ, token=tok), replace=True) and tok
+    return confirmation_tokens.upsert(dict(user_id=uid, type=typ, token=tok, validated=False, created_at=time.time())) and tok
 
 def reqd_chk(attrs: dict) -> AppErr | None:
     fields = [nm for nm, v in attrs.items() if not v]
