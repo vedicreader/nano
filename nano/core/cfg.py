@@ -10,10 +10,25 @@ from fastsql import Database, database as fdb
 __all__ = ['cfg', 'database', 'AppErr', 'home', 'send_email', 'RouteOverrides', 'get_pth', 'get_db_pth', 'in_static',
            'get_db_dir', 'not_prod', 'slug']
 
-def database(path=None, **kw):
+def turso_cfg(local_path):
+    'Build (conn_str, engine_kws) for a Turso connection, or None when TURSO env is unset.'
+    u, tok = cfg.turso_url, cfg.turso_token
+    if not (u and tok): return None
+    host = u.split('://', 1)[-1].rstrip('/')
+    if cfg.turso_sync: conn, ca = f'sqlite+libsql:///{local_path}', dict(auth_token=tok, sync_url=f'https://{host}')
+    else: conn, ca = f'sqlite+libsql://{host}?secure=true', dict(auth_token=tok)
+    return conn, dict(connect_args=ca)
+
+def database(path=None):
+    'fastsql `Database`: local sqlite file, or Turso (remote/embedded replica) when TURSO env is set.'
     if not path and not isinstance(path, (str, Path)): return None
+    t = turso_cfg(path)
+    if t:
+        conn, engine_kws = t
+        if cfg.turso_sync: Path(path).parent.mkdir(parents=True, exist_ok=True)
+        return Database(conn, engine_kws=engine_kws)
     if not Path(path).exists(): Path(path).parent.mkdir(parents=True,exist_ok=True)
-    return fdb(path or cfg.db, **kw)
+    return fdb(path or cfg.db)
 
 data_root, backups, static = Path('data'), Path('backups'), Path('static')
 def get_pth(nm, sf='', mk=False):
@@ -43,6 +58,9 @@ cfg = AttrDictDefault(app_nm=os.getenv('APP_NAME','Nano'),
                       tkn_exp=str2int(os.getenv('TOKEN_EXP', '691200')),
                       typwrtr_dyn_txt='Build, Expand, Innovate',
                       typwrtr_stat_txt='like lego',
+                      turso_url=os.getenv('TURSO_DATABASE_URL', ''),
+                      turso_token=os.getenv('TURSO_AUTH_TOKEN', ''),
+                      turso_sync=str2bool(os.getenv('TURSO_SYNC', '0')),
                       data_root=data_root, backup_path=backups,
                       db=get_db_pth(), static=static,
                       svg=in_static('svg'), github_repo=os.getenv('GITHUB_REPO', 'vedicreader/nano'))

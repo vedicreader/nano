@@ -14,6 +14,7 @@ dependencies = [
     "rcssmin>=1.2.2",
     "resend>=2.32.2",
     "rjsmin>=1.2.5",
+    "sqlalchemy-libsql>=0.2.0",
     "ujson>=5.13.0",
 ]
 

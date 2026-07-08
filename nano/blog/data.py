@@ -1,4 +1,4 @@
-from fastcore.all import L
+from fastcore.all import L, timed_cache
 from nano.core.cfg import database, get_db_pth
 from nano.blog.cfg import cfg
 
@@ -18,6 +18,7 @@ def blog_db(path=None):
 _db   = blog_db()
 posts = _db.t.posts
 
+@timed_cache(3600)
 def _parse_md(path):
     from datetime import datetime
     text = path.read_text()

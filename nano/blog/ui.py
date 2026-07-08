@@ -2,6 +2,7 @@ import html, re
 from collections import Counter
 from datetime import datetime
 from fastcore.xml import *
+from fastcore.xtras import timed_cache
 from monsterui.all import *
 from monsterui.franken import render_md, FrankenRenderer, Iframe
 from nano.blog.data import posts
@@ -198,7 +199,7 @@ def post_card(post, usr=None, featured=False):
 
 
 # ── Post list ─────────────────────────────────────────────────────────────────
-
+@timed_cache(3600)
 def post_list(all_posts, usr=None):
     if not all_posts:
         return Div(UkIcon('notebook', width=32, height=32, cls='text-muted-foreground mb-3'),
@@ -224,7 +225,7 @@ def post_list(all_posts, usr=None):
 
 
 # ── Post detail ───────────────────────────────────────────────────────────────
-
+@timed_cache(3600)
 def locked_teaser(post):
     _next = f'/blog/{post["slug"]}'
     _hx = dict(hx_get=f'{RouteOverrides.lgn}?next={_next}', hx_target='body', hx_swap='beforeend')
@@ -271,6 +272,7 @@ _NP_STYLE= Style('''.np-body{column-count:1} @media(min-width:768px){
 .np-body ol{break-inside:avoid}.np-body h2,.np-body h3,.np-body h4{break-before:avoid}}
 ''')
 
+@timed_cache(3600)
 def post_detail(post, usr=None):
     if post['visibility'] == 'members' and not usr: return locked_teaser(post)
     newspaper = post.get('layout', 'single') == 'newspaper'
@@ -287,7 +289,7 @@ def post_detail(post, usr=None):
 
 
 # ── New post form ─────────────────────────────────────────────────────────────
-
+@timed_cache(3600)
 def new_post_form(err_msg=None):
     back = A('← All posts', href='/blog',
          cls=f'{_ACCENT} text-xs font-mono hover:underline mb-6 block transition-opacity opacity-70 hover:opacity-100')
