@@ -1,9 +1,9 @@
 [project]
 name = "nano"
 version = "0.1.0"
-description = "Add your description here"
+description = "lego, but from the cloud"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "email-validator>=2.3.0",
     "fastcore>=1.13.9",
