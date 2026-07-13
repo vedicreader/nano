@@ -28,6 +28,10 @@ dev = [
 Homepage = "https://github.com/vedicreader/nano"
 Issues = "https://github.com/vedicreader/nano/issues"
 
+[project.scripts]
+nano-setup = "setup:setup"
+nano-skill = "setup:install_skills"
+
 [tool.hatch.build.targets.wheel]
 packages = ["nano"]
 

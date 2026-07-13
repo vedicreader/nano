@@ -10,18 +10,17 @@ Clone it, connect your blocks, ship it.
 git clone https://github.com/Karthik777/nano.git
 cd nano
 uv sync
-uv run nano-setup       # scaffold .env.example, .github workflow, and SKILL.md files
+uv run nano-setup       # link Vercel, scaffold .env.example, install skills
 uv run python main.py   # http://localhost:5001
 ```
 
 `nano-setup` is idempotent and safe to re-run. The console scripts shipped with the package:
 
-| script | purpose                                                                               |
-|---|---------------------------------------------------------------------------------------|
-| `uv run nano-setup` | init gheasy config, git-lfs patterns, `.env.example`, deploy workflow, install skills |
-| `uv run nano-skill` | (re)install `SKILL.md` into `.claude/skills/nano/` and `.agents/skills/nano/`         |
-| `uv run nano-push` | push values from `.env` to GitHub Actions secrets/vars (use `--dry-run` to preview)   |
-| `uv run nano-deploy` | vercel deploy (`compose` \| `deploy` \| `nuke` \| `env`)                            |
+| script | purpose |
+|---|---|
+| `uv run nano-setup` | link Vercel, scaffold `.env.example`, install `SKILL.md` skills |
+| `uv run nano-skill` | (re)install `SKILL.md` into `.claude/skills/nano/` and `.agents/skills/nano/` |
+| `uv run nano-push` | push `.env` values to the Vercel project (production + preview); `--dry-run` to preview |
 
 ## How it works
 
@@ -37,7 +36,7 @@ Each block exposes a `connect(app)` function that registers routes, seeds data, 
 
 ## What's included
 
-**core** handles config, logging, caching, scheduled jobs, backups, and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.
+**core** handles config and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.
 
 **auth** covers email/password registration with Resend verification, Google OAuth, and GitHub OAuth. One `connect()` call sets up all routes and session middleware. Route paths are overridable via `RouteOverrides`.
 
@@ -57,11 +56,9 @@ nano/
 │   ├── app.py           # wire up blocks, scheduled jobs
 │   ├── auth/            # auth block
 │   ├── blog/            # blog block
-│   └── core/            # config, cache, logging, backups, UI
+│   └── core/            # config, UI
 ├── data/
-│   ├── db/              # SQLite databases
-│   ├── logs/
-│   └── cache/           # DiskCache
+│   └── db/              # SQLite databases
 └── static/
 ```
 
@@ -106,20 +103,16 @@ The dev toolchain that ships with nano:
 - **[kosha](https://github.com/vedicreader/kosha)** — indexes your repo and installed packages into a hybrid search + call graph database. Agents query it before writing code.
 - **[fossick](https://github.com/vedicreader/fossick)** — get structured information from the web
 
-`deploy.py` in the repo deploys the code to vercel
-
 ## Deployment
 
-nano is an ASGI app. `deploy.py` uses dockeasy + vpseasy + cfeasy for a full Hetzner + Cloudflare tunnel deploy:
+nano deploys through Vercel's native Git integration — push to `main` and Vercel builds.
 
-```bash
-uv run nano-deploy deploy    # provisions VPS, wires tunnel, deploys
-uv run nano-deploy compose   # generate docker-compose.yml only
-uv run nano-deploy nuke      # delete VPS and tunnel (irreversible)
-uv run nano-push             # push .env values to GitHub Actions
-```
+1. Connect the GitHub repo to a Vercel project.
+2. Attach Turso via the Vercel marketplace integration (provides `TURSO_DATABASE_URL` and `TURSO_DATABASE_TURSO_AUTH_TOKEN`).
+3. `uv run nano-push` loads your `.env` into the Vercel project (production + preview). It leaves the Turso vars alone when an instance is already attached.
+4. Push to `main` to deploy.
 
-The app runs at [nano.sankalpa.sh](https://nano.sankalpa.sh)
+Local dev uses a SQLite file under `data/db/`; production persistence is Turso.
 
 ## Style
 
