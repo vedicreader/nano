@@ -29,6 +29,12 @@ def nf(req, exc): return not_found()
 kw,exh = {'class': 'hidden', 'hx-ext': 'preload', 'hx-boost': 'true'}, {404: nf, 500: nf, 403: nf}
 nano, rt = fast_app(hdrs=hdrs, bodykw=kw, live=not_prod(), title=cfg.app_nm, exts='preload', pico=False, exception_handlers=exh)
 
+# serve versioned css/js (vurl ?v= links) immutable, ahead of the default static route
+from starlette.routing import Mount
+for _d in ('vendor', 'assets'):
+    if (Path('static')/_d).exists():
+        nano.router.routes.insert(0, Mount(f'/static/{_d}', app=StaticImmutable(directory=f'static/{_d}'), name=f'static_{_d}'))
+
 # connect your blocks
 b.connect(nano)
 a.connect(nano) # auth needs to be the last to connect. it reads RouteOverrides skip list to skip auth
