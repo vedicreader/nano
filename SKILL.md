@@ -1,13 +1,13 @@
 ---
 name: nano
 description: >
-  Build serverless FastHTML + MonsterUI webapps on Vercel with Turso persistence and a full
+  Build serverless FastHTML + Oat webapps on Vercel with Turso persistence and a full
   auth system. Each feature is a block: a folder with cfg/data/ui/app and a connect(app) function.
 ---
 
 # nano
 
-nano is a FastHTML + MonsterUI webapp template built for serverless deployment on Vercel. Features are organised as blocks — self-contained folders, each exporting a `connect(app)` function that registers routes. Blocks are wired in `nano/app.py`; auth always connects last so it can read the accumulated `RouteOverrides.skip` list. Persistence is Turso (libsql); local dev falls back to SQLite.
+nano is a FastHTML + Oat webapp template built for serverless deployment on Vercel. Features are organised as blocks — self-contained folders, each exporting a `connect(app)` function that registers routes. Blocks are wired in `nano/app.py`; auth always connects last so it can read the accumulated `RouteOverrides.skip` list. Persistence is Turso (libsql); local dev falls back to SQLite.
 
 ## CLI entrypoints
 
@@ -77,7 +77,7 @@ from nano.core import (
 | `APP_SH` | `app_sh` | `nano` | short name for navbar |
 | `SITE_AUTHOR` | `site_author` | `Karthik Rajgopal` | |
 | `SITE_DESCRIPTION` | `site_description` | `Build performant webapps one block at a time` | |
-| `SITE_KEYWORDS` | `site_keywords` | `nano, fastHTML, MonsterUI, webapp, python` | |
+| `SITE_KEYWORDS` | `site_keywords` | `nano, fastHTML, Oat, webapp, python` | |
 | `MODE` | `mode` | `dev` | set to `production` in prod |
 | `DOMAIN` | `domain` | `http://localhost:5001` | full URL; auto-prefixed with `https://` if no scheme |
 | `PORT` | `port` | `5001` | int |
@@ -139,7 +139,7 @@ not_found()                                     # landing with 404 message
 Badge("new", cls=BadgePresetsT.primary)
 ```
 
-`BadgeT` — raw Tailwind class strings (colors, sizes, shapes).
+`BadgeT` — chip class strings (colors, sizes, shapes) defined in theme.css.
 `BadgePresetsT` — composed presets: `default`, `primary`, `sm`, `primary_sm`, `sm_strike`.
 `PresetsT` — surface presets for cards/containers: `shine`, `primary`, `transparent`, `glass`, `standout`.
 
@@ -156,7 +156,7 @@ montage(svg_paths)     # tiled SVG/image grid
 typewriter(stat_txt=None, dyn_txt_lst=None)
 github_star(repo=None) # live star count pill; repo defaults to cfg.github_repo
 main(content, cls=None)
-themes()               # returns header elements (franken-ui, tailwind, theme JS/CSS)
+themes()               # returns header elements (Oat CSS/JS, theme JS/CSS)
 ```
 
 ## Email
