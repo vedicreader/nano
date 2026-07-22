@@ -13,7 +13,7 @@ ROOT = repo_root()
 ENV_KEYS = dict(
     APP_NAME='Nano', APP_SH='nano', SITE_AUTHOR='Karthik Rajgopal',
     SITE_DESCRIPTION='Build performant webapps one block at a time',
-    SITE_KEYWORDS='nano, fastHTML, MonsterUI, webapp, python',
+    SITE_KEYWORDS='nano, fastHTML, Oat, webapp, python',
     MODE='production', DOMAIN='nano.sankalpa.sh', PORT='5001', TOKEN_EXP='691200',
     GITHUB_REPO='vedicreader/nano', WANT_GOOGLE='true', WANT_GIT='false', TURSO_SYNC='0',
     JWT_SCRT=None, RESEND_API_KEY=None, GOOGLE_CLI=None, GOOGLE_SCRT=None,

@@ -1,6 +1,6 @@
 # nano
 
-A FastHTML + MonsterUI web app starter for serverless deployments. Powers [vedicreader.com](https://vedicreader.com/).
+A FastHTML + Oat web app starter for serverless deployments. Powers [vedicreader.com](https://vedicreader.com/).
 
 Clone it, connect your blocks, ship it.
 
