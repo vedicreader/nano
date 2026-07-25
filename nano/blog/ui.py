@@ -155,8 +155,6 @@ def _featured_card(post, usr=None):
     locked = post['visibility'] == 'members' and not usr
     slug_href = f'/blog/{post["slug"]}'
     img_src = _first_image(post.get('body', ''))
-    # show:top — without it htmx swaps in the post but leaves the scroll position
-    # from the list, so a post opened from far down the page starts mid-article.
     kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true',
               hx_swap='innerHTML show:window:top')
     headline = H2(post['title'], cls='tracking-tight leading-tight mb-3')
@@ -178,8 +176,6 @@ def _featured_card(post, usr=None):
 def _sidebar_item(post, usr=None):
     locked = post['visibility'] == 'members' and not usr
     slug_href = f'/blog/{post["slug"]}'
-    # show:top — without it htmx swaps in the post but leaves the scroll position
-    # from the list, so a post opened from far down the page starts mid-article.
     kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true',
               hx_swap='innerHTML show:window:top')
     tag = Span('Members', cls='text-xs font-mono tracking-wider uppercase text-primary block mb-1') if locked else ''
@@ -192,8 +188,6 @@ def _grid_card(post, usr=None):
     locked = post['visibility'] == 'members' and not usr
     slug_href = f'/blog/{post["slug"]}'
     img_src = _first_image(post.get('body', ''))
-    # show:top — without it htmx swaps in the post but leaves the scroll position
-    # from the list, so a post opened from far down the page starts mid-article.
     kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true',
               hx_swap='innerHTML show:window:top')
     img_el = Div(Img(src=img_src, alt='', cls='w-full h-40 object-cover'),

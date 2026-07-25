@@ -161,8 +161,6 @@ def theme_switcher(cls='relative', heading='Customise', sub_heading='theme selec
 
 def mode_switcher():
     btn_cls = f'{ButtonT.icon} {ButtonT.sm}'
-    # sun-moon rather than icon_auto: the tabler glyph draws its own circle, which
-    # reads as a stray ring next to the plain lucide sun/moon of the other states.
     return Div(Div(lc_icon('sun-moon', 20), On('setMode("dark");'), cls=[btn_cls], id='auto-mode-btn'),
                Div(lc_icon('moon', 20), On('setMode("light");'), cls=btn_cls, id='dark-mode-btn'),
                Div(lc_icon('sun', 20), On('setMode("auto");'), cls=btn_cls, id='light-mode-btn'))

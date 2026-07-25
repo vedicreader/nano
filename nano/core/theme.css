@@ -24,12 +24,8 @@
 body { font-family: var(--font-serif), serif; }
 pre { overflow-x: auto; }
 
-/* ── Newspaper typography ────────────────────────────────────────────────────
-   Two serifs doing different jobs: the display face carries mastheads and
-   headlines, the text face carries running copy. */
 h1, h2, h3, h4 { font-family: var(--font-sans), serif; }
 
-/* opening capital, set in the display face and the accent colour */
 .dropcap > p:first-of-type::first-letter {
   float: left; font-family: var(--font-sans), serif; font-weight: 700;
   font-size: 3.4em; line-height: 0.78; color: var(--primary);
@@ -41,11 +37,7 @@ h1, h2, h3, h4 { font-family: var(--font-sans), serif; }
 html.dark { color-scheme: dark; }
 html.light { color-scheme: light; }
 
-/* ── Appearance changes cross-fade instead of snapping ───────────────────────
-   `.ui-anim` is added by theme.js for the length of any appearance change —
-   light/dark, palette, corners, shadows — then removed, so the transition
-   costs nothing during normal interaction. Covers every property those
-   settings actually move: colour, radius (Corners), shadow (Shadows). */
+/* ── Appearance-change cross-fade; theme.js adds .ui-anim for the change only ── */
 @media (prefers-reduced-motion: no-preference) {
   html.ui-anim, html.ui-anim *, html.ui-anim *::before, html.ui-anim *::after {
     transition: background-color 180ms ease, color 180ms ease,
@@ -67,8 +59,7 @@ html.light { color-scheme: light; }
 .theme-violet { --primary: light-dark(#7c3aed, #a78bfa); --primary-foreground: light-dark(#f5f3ff, #2e1065); }
 .theme-yellow { --primary: light-dark(#ca8a04, #facc15); --primary-foreground: light-dark(#fefce8, #422006); }
 
-/* paper: newspaper ink-on-ivory. Unlike the palettes above it also moves the
-   surface colors, and the accent shifts hue by mode — oxblood on paper, gilt on night. */
+/* unlike the palettes above, paper also moves the surface colors */
 .theme-paper {
   --background: light-dark(#f8f4e8, #221f19);
   --foreground: light-dark(#1b1a17, #d9d0bd);

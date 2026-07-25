@@ -10,9 +10,7 @@ for (const [k, p] of [['theme','theme-'],['radii','radii-'],['shadows','shadows-
 function storeState(key, value) {__NANO__[key] = value; localStorage.setItem(lego, JSON.stringify(__NANO__));}
 function getState(key){return __NANO__[key];}
 function removeState(key) {delete  __NANO__[key]; localStorage.setItem(key, JSON.stringify(__NANO__)); }
-// Cross-fade any appearance change (mode, palette, corners, shadows). `uiReady`
-// keeps it off the initial paint, where it would just look like a slow load.
-let uiReady = false, uiTimer = null;
+let uiReady = false, uiTimer = null;   // uiReady: skip the fade on initial paint
 function withUiAnim(apply) {
     if (!uiReady || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {apply(); return;}
     htmlElement.classList.add('ui-anim');
