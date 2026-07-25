@@ -21,8 +21,7 @@ function setTheme(color, fn=null, ...args) {setCls('theme', color, fn, ...args);
 function setRadii(radii, fn=null, ...args) {setCls('radii', radii, fn, ...args);}
 function setShadows(shadows, fn=null, ...args) {setCls('shadows', shadows, fn, ...args);}
 function setFont(font, fn=null, ...args) {setCls('font', font, fn, ...args);}
-function setMode(mode, fn=null, ...args) {
-    if (mode === null || mode === undefined) {return;}
+function applyMode(mode) {
     if (mode === 'dark') {htmlElement.classList.remove('light', 'auto'); htmlElement.classList.add('dark'); storeState('mode', mode);}
     if (mode === 'light') {htmlElement.classList.remove('dark', 'auto'); htmlElement.classList.add('light'); storeState('mode', mode);}
     if (mode === 'auto') {
@@ -31,6 +30,22 @@ function setMode(mode, fn=null, ...args) {
         htmlElement.classList.add(isDark ? 'dark' : 'light', 'auto');
         storeState('mode', mode);
     }
+}
+// `modeReady` keeps the flicker off the initial paint — it should read as a
+// deliberate switch, not a page that loads badly.
+let modeReady = false, modeTimer = null;
+function setMode(mode, fn=null, ...args) {
+    if (mode === null || mode === undefined) {return;}
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!modeReady || still) applyMode(mode);
+    else {
+        htmlElement.classList.remove('mode-anim');
+        void htmlElement.offsetWidth;          // restart the keyframes on a fast re-toggle
+        htmlElement.classList.add('mode-anim');
+        applyMode(mode);
+        clearTimeout(modeTimer);
+        modeTimer = setTimeout(() => htmlElement.classList.remove('mode-anim'), 600);
+    }
     if (typeof fn === 'function') {fn(...args);}
 }
 function setup() {
@@ -38,7 +53,8 @@ function setup() {
     setMode(__NANO__.mode);
     setRadii(__NANO__.radii);
     setShadows(__NANO__.shadows);
-    setFont(__NANO__.font);}
+    setFont(__NANO__.font);
+    modeReady = true;}
 
 mediaQuery.addEventListener('change', (event) => {if (!htmlElement.classList.contains('auto')) return; setMode('auto');});
 setTimeout(setup, 50);

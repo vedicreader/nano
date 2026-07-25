@@ -38,7 +38,8 @@ class ThemeRadii: none, sm, md, lg = 'radii-none', 'radii-sm', 'radii-md', 'radi
 class ThemeShadows: none, sm, md, lg = 'shadows-none', 'shadows-sm', 'shadows-md', 'shadows-lg'
 class ThemeFont: default, sm, lg = 'font-base', 'font-sm', 'font-lg'
 
-THEMES = [('theme-zinc', '#71717a'), ('theme-slate', '#64748b'), ('theme-stone', '#78716c'),
+THEMES = [('theme-paper', '#8a1f11'),
+          ('theme-zinc', '#71717a'), ('theme-slate', '#64748b'), ('theme-stone', '#78716c'),
           ('theme-red', '#dc2626'), ('theme-rose', '#e11d48'), ('theme-orange', '#ea580c'),
           ('theme-green', '#16a34a'), ('theme-blue', '#2563eb'), ('theme-violet', '#7c3aed'),
           ('theme-yellow', '#ca8a04')]
@@ -252,7 +253,7 @@ def _asset(nm, content):
     except OSError: return None
 
 @timed_cache(seconds=3600)
-def themes(color='zinc', radii=ThemeRadii.md, shadows=ThemeShadows.sm, font=ThemeFont.default):
+def themes(color='paper', radii=ThemeRadii.md, shadows=ThemeShadows.sm, font=ThemeFont.default):
     radii, shadows = getattr(radii, 'value', radii), getattr(shadows, 'value', shadows)
     d = AttrDict(mode='auto', theme='theme-%s' % color, radii=radii, shadows=shadows, font=font)
     j = loadX(_js, dict(state=json.dumps(d), theme=d.theme), r'\{\{__(\w+)__\}\}')
