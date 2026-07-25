@@ -126,7 +126,6 @@ def blog_hero(usr=None):
             A('Read the story', href='#blog-posts', cls=f'{ButtonT.ghost} {ButtonT.sm}'),
             cls='flex gap-3'), cls='flex flex-col justify-center')
 
-    # Terminal-style code window
     right = Div(
         Div(
             Div(
