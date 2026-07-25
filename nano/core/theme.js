@@ -10,11 +10,23 @@ for (const [k, p] of [['theme','theme-'],['radii','radii-'],['shadows','shadows-
 function storeState(key, value) {__NANO__[key] = value; localStorage.setItem(lego, JSON.stringify(__NANO__));}
 function getState(key){return __NANO__[key];}
 function removeState(key) {delete  __NANO__[key]; localStorage.setItem(key, JSON.stringify(__NANO__)); }
+// Cross-fade any appearance change (mode, palette, corners, shadows). `uiReady`
+// keeps it off the initial paint, where it would just look like a slow load.
+let uiReady = false, uiTimer = null;
+function withUiAnim(apply) {
+    if (!uiReady || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {apply(); return;}
+    htmlElement.classList.add('ui-anim');
+    apply();
+    clearTimeout(uiTimer);
+    uiTimer = setTimeout(() => htmlElement.classList.remove('ui-anim'), 220);
+}
 function setCls(key, value, fn=null, ...args) {
     if (value === null || value === undefined) {return;}
-    if (__NANO__[key]) htmlElement.classList.remove(__NANO__[key]);
-    htmlElement.classList.add(value);
-    storeState(key, value);
+    withUiAnim(() => {
+        if (__NANO__[key]) htmlElement.classList.remove(__NANO__[key]);
+        htmlElement.classList.add(value);
+        storeState(key, value);
+    });
     if (typeof fn === 'function') {fn(...args);}
 }
 function setTheme(color, fn=null, ...args) {setCls('theme', color, fn, ...args);}
@@ -31,21 +43,9 @@ function applyMode(mode) {
         storeState('mode', mode);
     }
 }
-// `modeReady` keeps the flicker off the initial paint — it should read as a
-// deliberate switch, not a page that loads badly.
-let modeReady = false, modeTimer = null;
 function setMode(mode, fn=null, ...args) {
     if (mode === null || mode === undefined) {return;}
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!modeReady || still) applyMode(mode);
-    else {
-        htmlElement.classList.remove('mode-anim');
-        void htmlElement.offsetWidth;          // restart the keyframes on a fast re-toggle
-        htmlElement.classList.add('mode-anim');
-        applyMode(mode);
-        clearTimeout(modeTimer);
-        modeTimer = setTimeout(() => htmlElement.classList.remove('mode-anim'), 600);
-    }
+    withUiAnim(() => applyMode(mode));
     if (typeof fn === 'function') {fn(...args);}
 }
 function setup() {
@@ -54,7 +54,7 @@ function setup() {
     setRadii(__NANO__.radii);
     setShadows(__NANO__.shadows);
     setFont(__NANO__.font);
-    modeReady = true;}
+    uiReady = true;}
 
 mediaQuery.addEventListener('change', (event) => {if (!htmlElement.classList.contains('auto')) return; setMode('auto');});
 setTimeout(setup, 50);

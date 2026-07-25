@@ -155,7 +155,10 @@ def _featured_card(post, usr=None):
     locked = post['visibility'] == 'members' and not usr
     slug_href = f'/blog/{post["slug"]}'
     img_src = _first_image(post.get('body', ''))
-    kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true')
+    # show:top — without it htmx swaps in the post but leaves the scroll position
+    # from the list, so a post opened from far down the page starts mid-article.
+    kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true',
+              hx_swap='innerHTML show:window:top')
     headline = H2(post['title'], cls='tracking-tight leading-tight mb-3')
     img_el = Div(Img(src=img_src, alt='', cls='img-featured'),
                  cls='overflow-hidden mb-4') if img_src else None
@@ -175,7 +178,10 @@ def _featured_card(post, usr=None):
 def _sidebar_item(post, usr=None):
     locked = post['visibility'] == 'members' and not usr
     slug_href = f'/blog/{post["slug"]}'
-    kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true')
+    # show:top — without it htmx swaps in the post but leaves the scroll position
+    # from the list, so a post opened from far down the page starts mid-article.
+    kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true',
+              hx_swap='innerHTML show:window:top')
     tag = Span('Members', cls='text-xs font-mono tracking-wider uppercase text-primary block mb-1') if locked else ''
     title = H3(post['title'], cls='leading-snug tracking-tight mb-1')
     date = Span(_fmt_date(post['created_at']), cls='text-xs font-mono text-light')
@@ -186,7 +192,10 @@ def _grid_card(post, usr=None):
     locked = post['visibility'] == 'members' and not usr
     slug_href = f'/blog/{post["slug"]}'
     img_src = _first_image(post.get('body', ''))
-    kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true')
+    # show:top — without it htmx swaps in the post but leaves the scroll position
+    # from the list, so a post opened from far down the page starts mid-article.
+    kw = dict(hx_get=slug_href, hx_target='#main-content', hx_push_url='true',
+              hx_swap='innerHTML show:window:top')
     img_el = Div(Img(src=img_src, alt='', cls='w-full h-40 object-cover'),
                  cls='overflow-hidden mb-3') if img_src else None
     tag = Span('Members', cls='text-xs font-mono tracking-wider uppercase text-primary block mb-1') if locked else ''

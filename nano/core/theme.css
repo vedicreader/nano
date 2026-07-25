@@ -41,25 +41,18 @@ h1, h2, h3, h4 { font-family: var(--font-sans), serif; }
 html.dark { color-scheme: dark; }
 html.light { color-scheme: light; }
 
-/* ── Mode switch: settle the new palette in, with a filament flicker on the way ──
-   `.mode-anim` is added by setMode() in theme.js and removed when the run ends. */
+/* ── Appearance changes cross-fade instead of snapping ───────────────────────
+   `.ui-anim` is added by theme.js for the length of any appearance change —
+   light/dark, palette, corners, shadows — then removed, so the transition
+   costs nothing during normal interaction. Covers every property those
+   settings actually move: colour, radius (Corners), shadow (Shadows). */
 @media (prefers-reduced-motion: no-preference) {
-  html.mode-anim body, html.mode-anim .navbar, html.mode-anim .card,
-  html.mode-anim input, html.mode-anim select, html.mode-anim textarea,
-  html.mode-anim :is(button, [type=submit], a.button) {
-    transition: background-color 0.45s ease, color 0.45s ease, border-color 0.45s ease;
+  html.ui-anim, html.ui-anim *, html.ui-anim *::before, html.ui-anim *::after {
+    transition: background-color 180ms ease, color 180ms ease,
+                border-color 180ms ease, outline-color 180ms ease,
+                fill 180ms ease, stroke 180ms ease,
+                box-shadow 180ms ease, border-radius 180ms ease !important;
   }
-  /* two quick dips, then hold — a tube warming up rather than a plain crossfade */
-  @keyframes mode-flicker {
-    0%   { opacity: 1; }
-    9%   { opacity: 0.42; }
-    17%  { opacity: 0.96; }
-    27%  { opacity: 0.55; }
-    38%  { opacity: 1; }
-    46%  { opacity: 0.82; }
-    100% { opacity: 1; }
-  }
-  html.mode-anim body { animation: mode-flicker 0.52s ease-out; }
 }
 
 /* ── Color themes: override Oat primary/ring per palette ─────────────────── */
