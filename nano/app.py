@@ -1,3 +1,4 @@
+import logging
 from fasthtml.common import *
 from fasthtml.common import Meta, Favicon, Socials, Link, serve, Script, JSONResponse, Div, P
 from .core import *
@@ -25,7 +26,10 @@ hdrs = [
     *Socials(title=cfg.app_nm, description=cfg.site_description, site_name=cfg.domain, image='/static/favicon.svg',
              url=cfg.domain), *themes()]
 
-def nf(req, exc): return not_found()
+def nf(req, exc):
+    'A 500 rendered as "page not found" is indistinguishable from a real 404 in a browser — log it or it is invisible.'
+    if getattr(exc, 'status_code', 500) >= 500: logging.error('%s %s', req.method, req.url.path, exc_info=exc)
+    return not_found()
 kw,exh = {'class': 'hidden', 'hx-ext': 'preload', 'hx-boost': 'true'}, {404: nf, 500: nf, 403: nf}
 nano, rt = fast_app(hdrs=hdrs, bodykw=kw, live=not_prod(), title=cfg.app_nm, exts='preload', pico=False, exception_handlers=exh)
 

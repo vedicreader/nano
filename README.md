@@ -120,6 +120,24 @@ nano deploys through Vercel's native Git integration — push to `main` and Verc
 
 Local dev uses a SQLite file under `data/db/`; production persistence is Turso.
 
+### One Turso database per block
+
+A libsql URL has no path component. `sqlite+libsql://host?secure=true` addresses *the* database, so passing different paths to `database()` does nothing in production — locally `auth.db`, `blog.db` and `dash.db` are three files, and on Turso they are one database with everyone's tables in it.
+
+Each logical database is therefore named, and looks for its own pair before falling back:
+
+| variable | database |
+|---|---|
+| `TURSO_AUTH_URL` · `TURSO_AUTH_AUTH_TOKEN` | auth |
+| `TURSO_BLOG_URL` · `TURSO_BLOG_AUTH_TOKEN` | blog |
+| `TURSO_DASH_URL` · `TURSO_DASH_AUTH_TOKEN` | dash's profile cache |
+| `TURSO_CHINOOK_URL` · `TURSO_CHINOOK_AUTH_TOKEN` | the Chinook sample data |
+| `TURSO_DATABASE_URL` · `TURSO_DATABASE_TURSO_AUTH_TOKEN` | the default for any of the above with no pair of its own |
+
+`TURSO_<NAME>_DATABASE_URL` and `TURSO_<NAME>_DATABASE_TURSO_AUTH_TOKEN` also work, matching what the Vercel integration names things when you attach a second instance. Setting a URL without its token is an error rather than a silent fall back to the shared credentials, which would authenticate against the wrong database.
+
+Nothing needs splitting for the app's own data — auth, blog and dash have distinct table names and sharing one database is a fine deployment. It is logged at startup so it is a choice rather than a surprise. What must never share is a database the dash block *reflects*: it reports whatever tables it finds, so a shared store would put `users` in the explorer. Those are opened with `own=True`, which takes the named pair or a local file and never the shared default.
+
 ## Style
 
 No ruff, no PEP 8. The code uses fastai idioms: `store_attr`, `patch`, `AttrDict`, `L`. Short functions, no docstrings unless the function name isn't enough. It reads fine on a phone.
