@@ -132,9 +132,22 @@ class NavBarT:
     glass = 'navbar navbar-glass'
     shining = 'navbar navbar-shining'
 
-def nav_links():
+def nav_link(txt, href, tag=None, gated=False, usr=None):
+    inner = [Span(txt), Span(tag, cls='nav-tag') if tag else None]
+    # A gated link would otherwise bounce a signed-out visitor to /a/lgn, which
+    # renders as a bare modal on an otherwise empty page. Open it in place instead,
+    # the same way the Login button does.
+    if gated and not usr:
+        # href stays real so the link still works with JS off; htmx cancels it otherwise
+        return A(*inner, href=href, cls='nav-pill',
+                 hx_get=r.lgn, hx_target='body', hx_swap='beforeend')
+    # unboosted: dash pages pull in Chart.js with their own <script src>, and a real
+    # navigation is the one thing guaranteed to run it
+    return A(*inner, href=href, cls='nav-pill', hx_boost='false')
+
+def nav_links(usr=None):
     if not r.nav: return None
-    return Div(*[A(t, href=h, cls='text-sm hover-dim') for t, h in r.nav], cls='flex items-center gap-4')
+    return Div(*[nav_link(*x, usr=usr) for x in r.nav], cls='flex items-center gap-2')
 
 def navbar(usr=None, title='', style=NavBarT.default, cls='w-full sticky', mobile_cls=''):
     usr_ok = bool(usr)
@@ -142,7 +155,7 @@ def navbar(usr=None, title='', style=NavBarT.default, cls='w-full sticky', mobil
     sep = Div('|', cls='text-light text-xl px-2')
     cmps = [(font_size_switcher(), inc_fnt_sz), (mode_switcher(), inc_mode_sw), (theme_switcher(), inc_th_sw),
             (sep, True), (github_star(), True), (logout(usr), inc_avtr), (login(), not inc_avtr)]
-    lft = Div(A(H4(title, cls='m-0'), href='/'), nav_links(), cls='flex items-center gap-4')
+    lft = Div(A(H4(title, cls='m-0'), href='/'), nav_links(usr), cls='flex items-center gap-4')
     rgt = Div(*[c for c, inc in cmps if inc], cls='flex items-center gap-1')
     return Div(Nav(lft, rgt, cls=mobile_cls), cls=[style, cls])
 

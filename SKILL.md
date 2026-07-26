@@ -297,8 +297,10 @@ Charts fetch their data from `/dash/chart.json` on intersection, so a page of ei
 ```python
 asset_js(path)     # Script tag for a package .js — static/assets when writable, inline when not
 vendor_js(name)    # Script tag for static/vendor/<name>, content-hashed
-RouteOverrides.nav # [(label, href)] — blocks append in connect(); navbar() renders them
+RouteOverrides.nav # [(label, href, tag=None, gated=False)] — blocks append in connect()
 ```
+
+`navbar()` renders nav entries as pills, deliberately smaller than the wordmark; `tag` puts a badge to the right (`'new'`). A `gated` entry opens the login modal in place for signed-out visitors rather than bouncing them to `/a/lgn`, which renders as a bare modal on an otherwise empty page. Nav pills carry `hx-boost="false"` so a block's page-level `<script src>` tags load through a real navigation.
 
 ## Deployment
 
