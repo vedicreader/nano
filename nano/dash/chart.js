@@ -1,5 +1,8 @@
 // nano dashboards: Chart.js defaults, theme-reactive colours, card tooltips.
 (function () {
+  // hx-boost swaps the body, which re-runs this file; without the guard every
+  // in-dashboard navigation would stack another set of observers
+  if (window.nanoChartScan) return;
   const SLOTS = ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5','--chart-6','--chart-7','--chart-8'];
   const CHROME = { grid: '--chart-grid', axis: '--chart-axis', tick: '--chart-tick',
                    card: '--card', ink: '--foreground' };
