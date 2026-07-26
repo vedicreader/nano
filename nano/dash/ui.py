@@ -20,8 +20,17 @@ def crumbs(*parts):
     out = []
     for i, (txt, href) in enumerate(parts):
         if i: out.append(Span('/', cls='sep'))
-        out.append(A(txt, href=href) if href else Span(txt))
+        out.append(dlink(txt, href=href) if href else Span(txt))
     return Div(*out, cls='crumbs')
+
+def dlink(*c, href, **kw):
+    '''Every in-dashboard link is a real navigation, never an hx-boost body swap.
+    Boost is the one step in this path that fails *silently*: on a non-2xx htmx fires
+    htmx:responseError and does nothing at all — no navigation, no error page. That is
+    exactly what "clicking does nothing" looks like. Unboosted, the browser shows
+    whatever the server actually returned. Dash pages also carry their own
+    <script src> for Chart.js, which a real load is guaranteed to run.'''
+    return A(*c, href=href, hx_boost='false', **kw)
 
 def wrap(*content, head=None): return Div(head, *content, cls='dash-wrap')
 
@@ -39,7 +48,7 @@ def index_view():
     cards = []
     for k, d in DBS.items():
         sch = schema(k)
-        cards.append(A(Div(H3(d.nm), P(d.about, cls='chart-why'),
+        cards.append(dlink(Div(H3(d.nm), P(d.about, cls='chart-why'),
                            Div(*[Span(f'{t} · {rowcount(k, t):,}', cls='role-chip') for t in list(sch)[:6]],
                                Span(f'+{len(sch) - 6} more', cls='role-chip') if len(sch) > 6 else None,
                                cls='flex flex-wrap gap-1 mt-2'),
@@ -73,7 +82,7 @@ def db_view(db):
     charts = Div(*[chart_card(s, wide=(s.kind == 'area' or s.kind == 'line')) for s in specs], cls='chart-grid')
     tbls = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(Th('Table'), Th('Rows', cls='num'), Th('Columns'), Th('References'), Th('Referenced by'))),
-        Tbody(*[Tr(Td(A(t, href=Routes.table.format(db=db, table=quote(t)))),
+        Tbody(*[Tr(Td(dlink(t, href=Routes.table.format(db=db, table=quote(t)))),
                    Td(f'{rowcount(db, t):,}', cls='num'), Td(str(len(sch[t].cols))),
                    Td(', '.join(f.ref_table for f in sch[t].fks) or '—'),
                    Td(', '.join(c.table for c in sch[t].children) or '—'))
@@ -91,7 +100,7 @@ def _col_row(db, tbl, name, s):
         bits = [f'min {_n(s.lo)}', f'max {_n(s.hi)}', f'mean {_n(s.mean)}', f'σ {_n(s.sd)}']
     elif s.role == 'temporal': bits = [str(s.get('lo'))[:10], '→', str(s.get('hi'))[:10]]
     elif s.get('maxlen') is not None: bits = [f'max len {s.maxlen}']
-    ref = A(f'{s.fk.ref_table}.{s.fk.ref_col}', href=Routes.table.format(db=db, table=quote(s.fk.ref_table))) if s.get('fk') else '—'
+    ref = dlink(f'{s.fk.ref_table}.{s.fk.ref_col}', href=Routes.table.format(db=db, table=quote(s.fk.ref_table))) if s.get('fk') else '—'
     return Tr(Td(Div(Span(name), Span(s.role, cls='role-chip'), cls='col-head')),
               Td(s.type), Td(f'{s.distinct:,}', cls='num'), Td(f'{s.nulls:,}', cls='num'),
               Td(ref), Td(' '.join(bits)))
@@ -114,14 +123,14 @@ def table_view(db, tbl, page=0):
         for c in r.cols:
             v, td = row[c.name], _fmt_cell(row[c.name], kinds[c.name])
             f = r.fk_by_col.get(c.name)
-            if f and v is not None: td = Td(A(str(v), href=_pk_href(db, f.ref_table, v)), cls='num')
-            elif c.name == pk and v is not None: td = Td(A(str(v), href=_pk_href(db, tbl, v)), cls='num')
+            if f and v is not None: td = Td(dlink(str(v), href=_pk_href(db, f.ref_table, v)), cls='num')
+            elif c.name == pk and v is not None: td = Td(dlink(str(v), href=_pk_href(db, tbl, v)), cls='num')
             tds.append(td)
         body.append(Tr(*tds))
     pages = (n + cfg.rows_per_page - 1) // cfg.rows_per_page
     nav = Div(Span(f'Rows {page * cfg.rows_per_page + 1:,}–{min(n, (page + 1) * cfg.rows_per_page):,} of {n:,}'),
-              Div(A('← Prev', href=f'?page={page - 1}', cls=f'{ButtonT.default} {ButtonT.xs}') if page else None,
-                  A('Next →', href=f'?page={page + 1}', cls=f'{ButtonT.default} {ButtonT.xs}') if page + 1 < pages else None,
+              Div(dlink('← Prev', href=f'?page={page - 1}', cls=f'{ButtonT.default} {ButtonT.xs}') if page else None,
+                  dlink('Next →', href=f'?page={page + 1}', cls=f'{ButtonT.default} {ButtonT.xs}') if page + 1 < pages else None,
                   cls='flex gap-2'), cls='pager')
     cols_tbl = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(Th('Column'), Th('Type'), Th('Distinct', cls='num'), Th('Nulls', cls='num'), Th('References'), Th('Profile'))),
@@ -139,7 +148,9 @@ def table_view(db, tbl, page=0):
 # ── /dash/{db}/{table}/{pk} — the nested view ─────────────────────────────────
 
 def _title_for(db, tbl, row):
-    lab = label_col(db, tbl)
+    # strict: a row is titled by a real name column or not at all — heading an invoice
+    # with its billing address because that was the first text column reads as a bug
+    lab = label_col(db, tbl, strict=True)
     return str(row.get(lab) or '') if lab else ''
 
 def row_view(db, tbl, pk, row):
@@ -151,7 +162,7 @@ def row_view(db, tbl, pk, row):
         if f and v is not None:
             parent = row_get(db, f.ref_table, v)
             lab = _title_for(db, f.ref_table, parent) if parent else None
-            dd = A(lab or str(v), href=_pk_href(db, f.ref_table, v))
+            dd = dlink(lab or str(v), href=_pk_href(db, f.ref_table, v))
         else:
             dd = 'null' if v is None else str(v)
         fields.append(Div(Dt(c.name), Dd(dd), cls='field'))
@@ -186,15 +197,15 @@ def rel_view(db, child, col, val, depth=0):
         for c in r.cols:
             v = row[c.name]
             f = r.fk_by_col.get(c.name)
-            if f and v is not None: tds.append(Td(A(str(v), href=_pk_href(db, f.ref_table, v)), cls='num'))
-            elif c.name == pk and v is not None: tds.append(Td(A(str(v), href=_pk_href(db, child, v)), cls='num'))
+            if f and v is not None: tds.append(Td(dlink(str(v), href=_pk_href(db, f.ref_table, v)), cls='num'))
+            elif c.name == pk and v is not None: tds.append(Td(dlink(str(v), href=_pk_href(db, child, v)), cls='num'))
             else: tds.append(_fmt_cell(v, kinds[c.name]))
         body.append(Tr(*tds))
     tbl = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(*[Th(c.name) for c in r.cols])), Tbody(*body)))
     more = None
     if n > len(rows):
-        more = P(A(f'View all {n:,} in {child} →', href=Routes.table.format(db=db, table=quote(child))),
+        more = P(dlink(f'View all {n:,} in {child} →', href=Routes.table.format(db=db, table=quote(child))),
                  cls='chart-why mt-2')
     # one level of inline nesting, then the row page takes over — otherwise a deep
     # schema would try to open the whole database in one response
