@@ -289,6 +289,7 @@ The blog UI uses a newspaper-style column break layout (`col` break) for post li
 | `Routes.row` | `/dash/{db}/{table}/{pk}` |
 | `Routes.rel` | `/dash/{db}/{table}/{pk}/rel/{child}` (htmx partial) |
 | `Routes.chart` | `/dash/chart.json` (registered first — `/dash/{db}` would otherwise match it) |
+| `Routes.fopts` | `/dash/filter.opts` (htmx partial: the filter form's operator and value controls; registered first for the same reason) |
 
 **Registering a database.** Only what's in `DBS` (`nano/dash/data.py`) is reachable, and within it only the tables `owned()` reports.
 
@@ -318,11 +319,30 @@ The dump ships with the block rather than being downloaded. Turso speaks SQL, no
 
 Chart rules score against these and the best `cfg.max_charts` render, at most 2 per table. Aggregation happens in SQL — no raw rows are pulled into Python. SQLite has no `STDDEV`, so σ comes from `sqrt(avg(x*x) - avg(x)^2)` in a single pass.
 
-**Identifier safety.** `ident(name, allowed)` raises unless `name` matches something the schema inspector reported, then quotes it. Every table and column in a generated query goes through it; values are always bound. `_check()` in `charts.py` validates a whole chart request — including that a join is a *declared* foreign key — before any SQL is built.
+**Filters** (`nano/dash/filters.py`). One filter is `table:column:op:value`, carried in repeated `f=` query parameters — so a filtered dashboard is a URL you can share, the back button undoes a facet, and nothing is stored server-side.
+
+```
+/dash/chinook?f=Artist%3AName%3Aeq%3AAC%2FDC        every chart and tile on the dashboard
+/dash/chinook/Track?f=Genre%3AName%3Aeq%3ARock&f=Genre%3AName%3Aeq%3AJazz
+```
+
+Two filters on the *same* column read as "either"; on different columns as "and". That is what ticking a second box in a facet list means, and the only reading under which it widens the result.
+
+The load-bearing part is that a filter is not applied literally. "Only AC/DC" is a predicate on `Artist.Name`, but the chart it has to change is drawn from `Track`, or `InvoiceLine`, and those have no artist column. `path(db, src, dst)` breadth-first searches the declared foreign keys — walked **both** ways, down to a parent and up into a child — for the shortest route from the chart's own table to the filtered one, up to `cfg.max_hops`. `where()` renders that route as a correlated `EXISTS`. Track → Album → Artist is two hops; Invoice → InvoiceLine → Track → Album → Artist is four. Shortest wins on the assumption that the closest relationship is the intended one.
+
+A table with no route is reported in `where().dropped` rather than quietly returning everything, and the UI says so on the card (`Unfiltered — Customer has no relation to Artist`) and in the row counts. A chart that silently ignored the filter beside charts that honoured it would be read as data.
+
+Applying it: `payload()` takes the parsed filters as `p['fs']` (or raw `f=` strings as `p['f']`); `count_rows`, `page_rows`, `stats` and `headline` all take `fs=`. Every chart aliases its base table to `"_b"` so the correlated subquery has one name to point at. Histogram bin edges keep coming from the *unfiltered* profile, so the same column keeps the same axis and two filters can be compared rather than just read; `stats` is the opposite case and re-measures in SQL, because the cached profile's mean describes rows the tile is no longer showing.
+
+Adding one: charts are clickable (the mark already names the thing, so `spec.on` + `spec.keys[i]` become a filter — raw group keys travel separately from the clipped axis labels), dimension cells in the rows table are links, and the filter bar has a three-control form. That form posts `fc`/`fop`/`fv` separately, because one `<select>` cannot compose a `table:column:op:value` string without JS; `_added()` folds them in and 303s to the canonical `f=` URL, so what is in the address bar is always the filter.
+
+**Identifier safety.** `ident(name, allowed)` raises unless `name` matches something the schema inspector reported, then quotes it. Every table and column in a generated query goes through it; values are always bound. `_check()` in `charts.py` validates a whole chart request — including that a join is a *declared* foreign key — before any SQL is built. `parse()` holds filters to the same rule: a table, column or operator the schema does not report is dropped, never corrected, so a hand-edited URL never reaches SQL.
 
 **Profiles** are cached in `data/db/dash.db` under a hash of the schema plus row count, so they survive restarts and invalidate when the data changes. Bump `_PROFILE_V` when the stats collected in `_measure` change.
 
-**Config** (`nano/dash/cfg.py`): `public` (`DASH_PUBLIC`, default off), `rows_per_page`, `sample_rows`, `max_cats`, `bar_cats`, `pie_cats`, `top_n`, `hist_bins`, `max_charts`, `rel_preview`.
+**Config** (`nano/dash/cfg.py`): `public` (`DASH_PUBLIC`, default off), `rows_per_page`, `sample_rows`, `max_cats`, `bar_cats`, `pie_cats`, `top_n`, `hist_bins`, `max_charts`, `rel_preview`, `max_filters`, `max_hops`, `filter_values`.
+
+`filter_values` is deliberately not `max_cats`: that one is about what makes a readable *chart*, and 275 artists is a hopeless doughnut but a perfectly good dropdown.
 
 ## Charts
 
