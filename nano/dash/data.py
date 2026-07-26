@@ -1,7 +1,6 @@
-import gzip, hashlib, json, re
-import sqlalchemy as sa
+import gzip, hashlib, json, logging, re
 from fastcore.all import L, AttrDict, ifnone
-from nano.core.cfg import database, get_db_pth, scratch_db_dir
+from nano.core.cfg import database, get_db_pth, scratch_db_dir, turso_target, env_nm
 from .cfg import cfg
 
 __all__ = ['DBS', 'get_db', 'seed', 'owned', 'schema', 'table_names', 'reflect', 'profile', 'rowcount', 'qmark', 'ident']
@@ -16,14 +15,24 @@ _meta.t.dash_profile.create(k=str, body=str, pk='k', if_not_exists=True)
 _cache = _meta.t.dash_profile
 
 def get_db(nm):
-    '''`own=True`: a database the explorer reflects gets its own store or none at all.
-    Left to the shared default it would be the app's own database, and /dash would be
-    reflecting auth and blog. Without TURSO_<NM>_URL it falls to a local file, which is
-    the right home for data rebuilt from a packaged dump anyway.'''
     if nm not in DBS: raise KeyError(nm)
-    if nm not in _conns: _conns[nm] = database(scratch_db_dir() / f'{nm}.db', own=True)
+    if nm not in _conns: _conns[nm] = _connect(nm)
     if nm not in _seeded: seed(nm)
     return _conns[nm]
+
+def _connect(nm):
+    '''A Turso database of its own, or a local file.
+
+    `own=True` is what keeps it off the app's shared store: the explorer reports whatever
+    tables the connection has, so sharing one with auth would put `users` in the dashboard.
+    Turso is the real home — seed once and every instance after that just loads it. The
+    local file is the fallback, and re-seeds on every cold start, so say so.'''
+    t = turso_target(nm)
+    if t.url and not t.own:
+        logging.warning('dash: %r has no Turso database of its own, falling back to a local file that '
+                        'each instance re-seeds. Set TURSO_%s_URL and TURSO_%s_AUTH_TOKEN to persist it.',
+                        nm, env_nm(nm), env_nm(nm))
+    return database(scratch_db_dir() / f'{nm}.db', own=True)
 
 # ── seeding ───────────────────────────────────────────────────────────────────
 
@@ -53,38 +62,41 @@ def owned(nm):
         _owned[nm] = tuple(d.tables) if d.get('tables') else tuple(_dump(nm).tables)
     return _owned[nm]
 
-def seed(nm):
-    '''Load the packaged dump: ~70 batched multi-row statements, not 15k.
+def seeded(nm):
+    '''Is the dump already in there? Tables fill in `owned()` order and each commits on its
+    own, so the last one present and non-empty means some earlier request finished the job.
+    Two round trips, which is what the steady state costs on a remote database.'''
+    db, want = _conns[nm], owned(nm)
+    return bool(want) and set(want) <= set(db.table_names()) and bool(db.t[want[-1]].count)
 
-    Resumable and safe to race. A serverless cold start can be cut off part-way
-    through 480KB of inserts over a remote connection, so progress is tracked per
-    table and INSERT OR IGNORE lets a retry — or a second worker — converge instead
-    of erroring on a duplicate key or double-loading a half-filled table.'''
-    if not DBS[nm].get('dump'): _seeded.add(nm); return
+def seed(nm):
+    '''Put the dump in the database if it isn't there; otherwise just use what's there.
+
+    The dump ships with the block rather than being fetched, because Turso speaks SQL, not
+    database files — a downloaded .db would have to be replayed statement by statement all
+    the same, and SQL pulled off the network at runtime is SQL that executes unreviewed.
+
+    Resumable and safe to race: ~70 batched statements, one commit per table, and INSERT OR
+    IGNORE so a cold start cut off part-way through converges instead of duplicating rows.'''
+    if not DBS[nm].get('dump') or seeded(nm): _seeded.add(nm); return
     db, d = _conns[nm], _dump(nm)
-    _owned.setdefault(nm, tuple(d.tables))
-    have = set(sa.inspect(db.engine).get_table_names())
-    made = [t for t in d.tables if t not in have]
-    for t in made: _exec(db, d.tables[t])
-    if made: db.conn.commit()
-    todo = [t for t, n in _counts(db, d.tables).items() if not n and d.rows.get(t)]
-    for t in todo:
+    have = set(db.table_names())
+    for t in owned(nm):
+        if t not in have: _exec(db, d.tables[t])
+    db.conn.commit()
+    db.meta.reflect(bind=db.engine)
+    for t in owned(nm):                       # owned() order, so the last table really is last
+        if not d.rows.get(t) or db.t[t].count: continue
         for st in d.rows[t]: _exec(db, _INTO.sub('INSERT OR IGNORE INTO', st, count=1))
         db.conn.commit()
-    if made or todo:
-        for st in d.indexes: _exec(db, st)
-        db.conn.commit()
-        db.meta.reflect(bind=db.engine)
+    for st in d.indexes: _exec(db, st)
+    db.conn.commit()
+    db.meta.reflect(bind=db.engine)
     _seeded.add(nm)
 
 # exec_driver_sql, not text(): the data contains literals like ':Pines' that
 # SQLAlchemy would otherwise read as bind parameters
 def _exec(db, st): db.conn.exec_driver_sql(st)
-
-def _counts(db, tables):
-    'Row counts for every dump table in one round trip — the remote connection makes each one expensive.'
-    sel = ', '.join(f'(select count(*) from {ident(t, tables)}) as {ident(t, tables)}' for t in tables)
-    return db.q(f'select {sel}')[0]
 
 def ident(name, allowed):
     'Quote an identifier, but only after it matches something the schema actually reported.'
@@ -97,18 +109,21 @@ def qmark(db, sql, **params): return db.q(sql, **params)
 
 def table_names(nm):
     'Dump tables that are actually there — the intersection is both the seed check and the boundary.'
-    live = set(sa.inspect(get_db(nm).engine).get_table_names())
-    return sorted(live & set(owned(nm)))
+    return sorted(set(get_db(nm).table_names()) & set(owned(nm)))
 
 def reflect(nm, tbl):
-    'Columns, primary key and foreign keys for one table, straight from the dialect inspector.'
+    '''Columns, primary key and foreign keys, read off the metadata fastsql reflected when it
+    connected. A fresh `sa.inspect` would re-query the schema, and this runs on every chart,
+    row and relation — once per page turn is plenty over a remote database.'''
     if tbl not in table_names(nm): raise KeyError(tbl)
-    ins = sa.inspect(get_db(nm).engine)
-    cols = [AttrDict(name=c['name'], type=str(c['type']), nullable=c['nullable']) for c in ins.get_columns(tbl)]
-    pk = list(ins.get_pk_constraint(tbl).get('constrained_columns') or [])
-    fks = [AttrDict(col=f['constrained_columns'][0], ref_table=f['referred_table'], ref_col=f['referred_columns'][0])
-           for f in ins.get_foreign_keys(tbl) if f.get('constrained_columns') and f.get('referred_columns')]
-    return AttrDict(name=tbl, cols=cols, pk=pk, fks=fks, fk_by_col={f.col: f for f in fks})
+    t = get_db(nm).t[tbl].table
+    cols = [AttrDict(name=c.name, type=str(c.type), nullable=c.nullable) for c in t.columns]
+    # walking columns puts foreign keys in column order, which is the order the table reads in;
+    # the inspector reported them in PRAGMA order, which is neither declared nor meaningful
+    fks = [AttrDict(col=c.name, ref_table=fk.column.table.name, ref_col=fk.column.name)
+           for c in t.columns for fk in c.foreign_keys]
+    return AttrDict(name=tbl, cols=cols, pk=[c.name for c in t.primary_key], fks=fks,
+                    fk_by_col={f.col: f for f in fks})
 
 def schema(nm):
     'Whole-database shape: every table with its columns, keys and inbound child references.'
@@ -120,8 +135,8 @@ def schema(nm):
     return tbls
 
 def rowcount(nm, tbl):
-    db, names = get_db(nm), table_names(nm)
-    return db.q(f'select count(*) as n from {ident(tbl, names)}')[0]['n']
+    if tbl not in table_names(nm): raise KeyError(tbl)
+    return get_db(nm).t[tbl].count
 
 # ── profiling ─────────────────────────────────────────────────────────────────
 

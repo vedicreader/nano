@@ -35,6 +35,8 @@ a.connect(nano)   # auth — always last
 
 Each block exposes a `connect(app)` function that registers routes, seeds data, and wires up any middleware it needs. Blocks can share a database or borrow config from each other. They can also override routes registered by earlier blocks — first in line wins.
 
+The folder is the unit of reuse. A block owns its routes, its data, and its assets: CSS and JS live in the block and load only on that block's pages, via `asset_css()` / `asset_js()`. No block imports another — `nano.core` is the only shared dependency, and it owns design tokens rather than any block's components. Copying a block folder into another nano app and adding one `connect()` line is meant to be the whole job.
+
 ## What's included
 
 **core** handles config and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.
@@ -131,12 +133,14 @@ Each logical database is therefore named, and looks for its own pair before fall
 | `TURSO_AUTH_URL` · `TURSO_AUTH_AUTH_TOKEN` | auth |
 | `TURSO_BLOG_URL` · `TURSO_BLOG_AUTH_TOKEN` | blog |
 | `TURSO_DASH_URL` · `TURSO_DASH_AUTH_TOKEN` | dash's profile cache |
-| `TURSO_CHINOOK_URL` · `TURSO_CHINOOK_AUTH_TOKEN` | the Chinook sample data |
+| `TURSO_CHINOOK_URL` · `TURSO_CHINOOK_AUTH_TOKEN` | the Chinook sample data — set these, see below |
 | `TURSO_DATABASE_URL` · `TURSO_DATABASE_TURSO_AUTH_TOKEN` | the default for any of the above with no pair of its own |
 
 `TURSO_<NAME>_DATABASE_URL` and `TURSO_<NAME>_DATABASE_TURSO_AUTH_TOKEN` also work, matching what the Vercel integration names things when you attach a second instance. Setting a URL without its token is an error rather than a silent fall back to the shared credentials, which would authenticate against the wrong database.
 
 Nothing needs splitting for the app's own data — auth, blog and dash have distinct table names and sharing one database is a fine deployment. It is logged at startup so it is a choice rather than a surprise. What must never share is a database the dash block *reflects*: it reports whatever tables it finds, so a shared store would put `users` in the explorer. Those are opened with `own=True`, which takes the named pair or a local file and never the shared default.
+
+Give Chinook its own Turso database and the dump is written once, ever: the first request fills it, and every cold start after that finds it populated and just loads it. Without `TURSO_CHINOOK_URL` it still works — it falls back to a local file and logs a warning — but that file is per-instance and re-seeds on every cold start.
 
 ## Style
 

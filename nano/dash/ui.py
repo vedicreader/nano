@@ -1,7 +1,9 @@
+from decimal import Decimal
 from urllib.parse import urlencode, quote
 from fastcore.xml import *
 from fasthtml.common import *
-from nano.core import lc_icon, TextT, ButtonT, PresetsT, asset_js, vendor_js, Badge, BadgePresetsT
+from fastcore.all import timed_cache
+from nano.core import lc_icon, TextT, ButtonT, PresetsT, asset_js, asset_css, vendor_js, Badge, BadgePresetsT
 from .cfg import Routes, cfg
 from .data import DBS, schema, reflect, profile, table_names, rowcount
 from .infer import roles, specs_for_db, specs_for_table, label_col, fmt_of, _h
@@ -9,10 +11,12 @@ from .charts import stats, sparkline, page_rows, row_get, child_rows, child_coun
 
 __all__ = ['dash_head', 'index_view', 'db_view', 'table_view', 'row_view', 'rel_view']
 
+@timed_cache(seconds=3600)
 def dash_head():
-    'Chart.js plus the nano wrapper — only on dashboard pages, never on the blog.'
+    'Everything the block needs and nothing else asks for: its own styles, Chart.js, the nano wrapper.'
     from pathlib import Path
-    return [vendor_js('chart.umd.min.js'), asset_js(Path(__file__).parent / 'chart.js', defer=True)]
+    here = Path(__file__).parent
+    return [asset_css(here / 'dash.css'), vendor_js('chart.umd.min.js'), asset_js(here / 'chart.js', defer=True)]
 
 # ── chrome ────────────────────────────────────────────────────────────────────
 
@@ -35,8 +39,9 @@ def dlink(*c, href, **kw):
 def wrap(*content, head=None): return Div(head, *content, cls='dash-wrap')
 
 def _fmt_cell(v, kind='text'):
+    # fastsql hands back the column's declared type, so money arrives as Decimal, not float
     if v is None: return Td('null', cls='null')
-    if kind == 'num': return Td(f'{v:,}' if isinstance(v, int) else f'{v:,.2f}' if isinstance(v, float) else str(v), cls='num')
+    if kind == 'num': return Td(f'{v:,}' if isinstance(v, int) else f'{v:,.2f}' if isinstance(v, (float, Decimal)) else str(v), cls='num')
     s = str(v)
     return Td(s if len(s) <= 60 else s[:57] + '…', title=s if len(s) > 60 else None)
 

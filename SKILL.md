@@ -42,6 +42,20 @@ d.connect(nano)   # dash
 a.connect(nano)   # auth last — reads the complete RouteOverrides.skip list
 ```
 
+**A block owns its assets.** Put a block's CSS and JS in the block folder and pull them in from a per-page head function, not in `nano/core/theme.css`:
+
+```python
+# my_block/ui.py
+@timed_cache(seconds=3600)
+def my_head():
+    here = Path(__file__).parent
+    return [asset_css(here / 'my_block.css'), asset_js(here / 'my_block.js', defer=True)]
+```
+
+Both helpers serve from `static/assets` when the filesystem is writable and inline the content when it is not, so this works on serverless. The head function goes into the page for that block's routes only — no other block pays for it.
+
+The point is that the folder is the unit of reuse. A block whose styles live in the core theme cannot be copied into another nano app without hunting through a shared stylesheet for the rules that belong to it. Core owns design *tokens* (`--card`, `--border`, `--text-*`, `--radius-*`); a block owns its own components and any tokens only it uses. Blocks must not import each other — `nano.core` is the only shared dependency.
+
 ## Core imports
 
 ```python
@@ -110,7 +124,21 @@ db = database(pth, own=True)                   # never the shared store: its own
 
 Sharing is fine for the app's own data — auth, blog and dash have distinct table names. It is **not** fine for a database some block reflects, since reflection reports whatever it finds. Those pass `own=True`, which takes the named pair or a local file and never the shared default.
 
-`scratch_db_dir()` is where an `own=True` database with no Turso pair goes: `data/db` normally, the system temp dir when the deployment is read-only. That is the right home for anything rebuildable from a packaged dump — a cold start reloads it locally in well under a second, against 68 round trips to a remote store.
+`scratch_db_dir()` is the fallback for an `own=True` database with no Turso pair: `data/db` normally, the system temp dir when the deployment is read-only. It works, but every instance re-seeds into it, so the block logs a warning naming the variables to set. A Turso database of its own is the real answer — fill it once and every cold start after that just loads it.
+
+**Prefer fastsql's table API to hand-written SQL.**
+
+```python
+db.table_names()                                    # not sa.inspect(db.engine).get_table_names()
+db.t[nm].table                                      # reflected metadata: columns, primary_key, foreign_keys
+db.t[nm].count, db.t[nm].count_where(w, args)
+db.t[nm].get(pk, as_cls=False, default=None)
+db.t[nm].rows_where(where, args, order_by=, select=, limit=, offset=)
+```
+
+`db.t[nm].table` reads metadata fastsql reflected at connect time; a fresh `sa.inspect` re-queries the schema on every call, which on a remote database is a round trip per chart and per row. Two things to know: `count_where(**kw)` does *not* filter, so pass `where=` and `where_args=`; and the table API returns the column's declared type (`Decimal`, `datetime`) where `db.q` returns what the driver gives (`float`, `str`), which matters anywhere the value is formatted or serialised to JSON.
+
+Hand-written `db.q` is still right for `GROUP BY` aggregation, which the table API does not model.
 
 The Vercel serverless filesystem is ephemeral, so anything that must *persist* goes through Turso. Attach it via the Vercel marketplace integration (`TURSO_DATABASE_URL` and `TURSO_DATABASE_TURSO_AUTH_TOKEN` are injected automatically). Only set `TURSO_SYNC=1` when you need embedded replica mode.
 
@@ -272,7 +300,11 @@ DBS.mydb = AttrDict(nm='My DB', dump='mydb.sql.gz', about='...')
 
 `dump` is optional — drop it for a database that already exists at `get_db_pth(<key>)`, but then give the entry a `tables=(...)` list, since there is no dump to derive one from. Seed dumps live in `nano/dash/seed/` as gzipped SQL, split on a `\n--;--\n` separator and applied with `exec_driver_sql` (data containing `:word` would otherwise be read as bind parameters). Batched multi-row INSERTs keep Chinook to ~68 statements.
 
-**Seeding is resumable, and must stay that way.** "The database has tables in it" is not a seed check — under Turso it is always true before dash runs. `seed()` creates missing tables, then fills each table whose row count is 0, one commit per table. A cold start killed part-way through 480 KB of inserts leaves whole tables done and the rest empty, and the next request finishes the job; `INSERT OR IGNORE` means two workers racing the same table converge instead of colliding on a primary key.
+**Put it there if it isn't, load it if it is.** `seeded(nm)` answers that in two round trips: every `owned()` table present, and the last one non-empty. Tables fill in `owned()` order with a commit each, so the last one is a sound "an earlier request finished" signal. Given chinook its own Turso database, the dump is written once ever and every cold start after that runs zero statements.
+
+The dump ships with the block rather than being downloaded. Turso speaks SQL, not database files, so a fetched `.db` would have to be replayed statement by statement anyway — and SQL pulled off the network at runtime is SQL that executes without review.
+
+**Seeding is resumable, and must stay that way.** "The database has tables in it" is not a seed check — under a shared Turso database it is always true before dash runs. `seed()` creates missing tables, then fills each table whose row count is 0. A cold start killed part-way through 480 KB of inserts leaves whole tables done and the rest empty, and the next request finishes the job; `INSERT OR IGNORE` means two workers racing the same table converge instead of colliding on a primary key.
 
 **Column roles** (`nano/dash/infer.py`) — assigned from declared type, name, and sampled stats:
 
@@ -294,7 +326,7 @@ Chart rules score against these and the best `cfg.max_charts` render, at most 2 
 
 ## Charts
 
-Chart.js 4 is vendored at `static/vendor/chart.umd.min.js` (204 KB raw / 69 KB gzip, no runtime deps) and only loaded on `/dash` routes, via `dash_head()`. `nano/dash/chart.js` wraps it.
+Chart.js 4 is vendored at `static/vendor/chart.umd.min.js` (204 KB raw / 69 KB gzip, no runtime deps) and only loaded on `/dash` routes, via `dash_head()`, alongside `nano/dash/chart.js` (the wrapper) and `nano/dash/dash.css` (every style `/dash` renders, including the `--chart-*` tokens). Nothing the block needs lives outside the block.
 
 Series colours are `--chart-1` … `--chart-8` in `theme.css`. They are **fixed across all 11 themes on purpose**: the hue *order* is what keeps adjacent series apart under protanopia and deuteranopia, so re-tinting per palette would break it. Light and dark are separately selected steps, validated against nano's surface extremes (`#ffffff`, `#2a2520`). Chart chrome — `--chart-grid`, `--chart-axis`, `--chart-tick` — does follow the theme.
 
@@ -307,7 +339,8 @@ Charts fetch their data from `/dash/chart.json` on intersection, so a page of ei
 ## Core additions
 
 ```python
-asset_js(path)     # Script tag for a package .js — static/assets when writable, inline when not
+asset_js(path)     # Script tag for a block's .js — static/assets when writable, inline when not
+asset_css(path)    # Link tag for a block's .css — same fallback; keeps styles with the block
 vendor_js(name)    # Script tag for static/vendor/<name>, content-hashed
 RouteOverrides.nav # [(label, href, tag=None, gated=False)] — blocks append in connect()
 ```
