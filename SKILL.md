@@ -42,6 +42,20 @@ d.connect(nano)   # dash
 a.connect(nano)   # auth last — reads the complete RouteOverrides.skip list
 ```
 
+**A block owns its assets.** Put a block's CSS and JS in the block folder and pull them in from a per-page head function, not in `nano/core/theme.css`:
+
+```python
+# my_block/ui.py
+@timed_cache(seconds=3600)
+def my_head():
+    here = Path(__file__).parent
+    return [asset_css(here / 'my_block.css'), asset_js(here / 'my_block.js', defer=True)]
+```
+
+Both helpers serve from `static/assets` when the filesystem is writable and inline the content when it is not, so this works on serverless. The head function goes into the page for that block's routes only — no other block pays for it.
+
+The point is that the folder is the unit of reuse. A block whose styles live in the core theme cannot be copied into another nano app without hunting through a shared stylesheet for the rules that belong to it. Core owns design *tokens* (`--card`, `--border`, `--text-*`, `--radius-*`); a block owns its own components and any tokens only it uses. Blocks must not import each other — `nano.core` is the only shared dependency.
+
 ## Core imports
 
 ```python
@@ -294,7 +308,7 @@ Chart rules score against these and the best `cfg.max_charts` render, at most 2 
 
 ## Charts
 
-Chart.js 4 is vendored at `static/vendor/chart.umd.min.js` (204 KB raw / 69 KB gzip, no runtime deps) and only loaded on `/dash` routes, via `dash_head()`. `nano/dash/chart.js` wraps it.
+Chart.js 4 is vendored at `static/vendor/chart.umd.min.js` (204 KB raw / 69 KB gzip, no runtime deps) and only loaded on `/dash` routes, via `dash_head()`, alongside `nano/dash/chart.js` (the wrapper) and `nano/dash/dash.css` (every style `/dash` renders, including the `--chart-*` tokens). Nothing the block needs lives outside the block.
 
 Series colours are `--chart-1` … `--chart-8` in `theme.css`. They are **fixed across all 11 themes on purpose**: the hue *order* is what keeps adjacent series apart under protanopia and deuteranopia, so re-tinting per palette would break it. Light and dark are separately selected steps, validated against nano's surface extremes (`#ffffff`, `#2a2520`). Chart chrome — `--chart-grid`, `--chart-axis`, `--chart-tick` — does follow the theme.
 
@@ -307,7 +321,8 @@ Charts fetch their data from `/dash/chart.json` on intersection, so a page of ei
 ## Core additions
 
 ```python
-asset_js(path)     # Script tag for a package .js — static/assets when writable, inline when not
+asset_js(path)     # Script tag for a block's .js — static/assets when writable, inline when not
+asset_css(path)    # Link tag for a block's .css — same fallback; keeps styles with the block
 vendor_js(name)    # Script tag for static/vendor/<name>, content-hashed
 RouteOverrides.nav # [(label, href, tag=None, gated=False)] — blocks append in connect()
 ```

@@ -35,6 +35,8 @@ a.connect(nano)   # auth — always last
 
 Each block exposes a `connect(app)` function that registers routes, seeds data, and wires up any middleware it needs. Blocks can share a database or borrow config from each other. They can also override routes registered by earlier blocks — first in line wins.
 
+The folder is the unit of reuse. A block owns its routes, its data, and its assets: CSS and JS live in the block and load only on that block's pages, via `asset_css()` / `asset_js()`. No block imports another — `nano.core` is the only shared dependency, and it owns design tokens rather than any block's components. Copying a block folder into another nano app and adding one `connect()` line is meant to be the whole job.
+
 ## What's included
 
 **core** handles config and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.

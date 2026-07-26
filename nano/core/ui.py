@@ -14,7 +14,7 @@ __all__ = ['landing', 'welcome_page', 'placeholder', 'navbar', 'theme_switcher',
            'svg_img', 'montage', 'typewriter', 'base', 'Badge', 'BadgeT', 'BadgePresetsT', 'PresetsT',
            'welcome', 'not_found', 'email_template', 'main', 'themes', 'github_star', 'stringify',
            'ButtonT', 'TextT', 'ThemeRadii', 'ThemeShadows', 'ThemeFont', 'NavBarT', 'THEMES',
-           'LabelInput', 'LabelTextArea', 'LabelSelect', 'modal', 'CmdPalette', 'asset_js', 'vendor_js']
+           'LabelInput', 'LabelTextArea', 'LabelSelect', 'modal', 'CmdPalette', 'asset_js', 'asset_css', 'vendor_js']
 
 def stringify(o):
     'Join class fragments (str | list | tuple, arbitrarily nested) into one class string.'
@@ -141,8 +141,8 @@ def nav_link(txt, href, tag=None, gated=False, usr=None):
         # href stays real so the link still works with JS off; htmx cancels it otherwise
         return A(*inner, href=href, cls='nav-pill',
                  hx_get=r.lgn, hx_target='body', hx_swap='beforeend')
-    # unboosted: dash pages pull in Chart.js with their own <script src>, and a real
-    # navigation is the one thing guaranteed to run it
+    # unboosted: a block brings its own <script src> and <link>, and a real navigation is
+    # the one thing guaranteed to run them
     return A(*inner, href=href, cls='nav-pill', hx_boost='false')
 
 def nav_links(usr=None):
@@ -274,6 +274,12 @@ def asset_js(path, **kw):
     p = Path(path)
     c = loadX(p)
     return Script(src=_vlink(f'/static/assets/{p.name}'), **kw) if _asset(p.name, c) else Script(c, **kw)
+
+def asset_css(path, **kw):
+    'Link tag for a block-local .css file, so a block can ship its own styles instead of adding to the core theme.'
+    p = Path(path)
+    c = loadX(p)
+    return Link(rel='stylesheet', href=_vlink(f'/static/assets/{p.name}'), **kw) if _asset(p.name, c) else Style(c, **kw)
 
 def vendor_js(nm, **kw): return Script(src=_vlink(f'/static/vendor/{nm}'), **kw)
 
