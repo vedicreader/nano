@@ -6,6 +6,10 @@ from .infer import roles, label_col, fmt_of, _h
 
 __all__ = ['payload', 'stats', 'sparkline', 'page_rows', 'row_get', 'child_rows', 'child_count', 'headline']
 
+# Reads that name rows go through fastsql's table API; the aggregates below stay hand-written
+# because GROUP BY is not something rows_where models. _scatter is hand-written for a different
+# reason: its rows go straight out as JSON, and the driver's plain floats serialise where the
+# typed Decimals the table API returns would not.
 KINDS = {'bar', 'hbar', 'line', 'area', 'doughnut', 'scatter'}
 AGGS = {'sum', 'count', 'hist', 'raw'}
 BUCKETS = {'%Y', '%Y-%m', '%Y-%m-%d'}
@@ -121,11 +125,13 @@ def stats(db, tbl, col):
     'Mean, σ and the quantiles that make a stat tile worth reading.'
     s = profile(db, tbl)['cols'][col]
     if s['kind'] != 'num' or not s.get('sd'): return None
-    d, qt, qc = get_db(db), ident(tbl, table_names(db)), ident(col, _cols(db, tbl))
-    n = d.q(f'select count({qc}) as n from {qt}')[0]['n']
+    t, qc = _t(db, tbl), ident(col, _cols(db, tbl))
+    nn = f'{qc} is not null'
+    n = t.count_where(nn)
     if not n: return None
-    pick = lambda frac: d.q(f'select {qc} as v from {qt} where {qc} is not null order by {qc} '
-                            f'limit 1 offset :o', o=max(0, int(n * frac) - 1))[0]['v']
+    def pick(frac):
+        r = list(t.rows_where(nn, order_by=qc, select=qc, limit=1, offset=max(0, int(n * frac) - 1)))
+        return r[0][col] if r else None
     return AttrDict(n=n, mean=s['mean'], sd=s['sd'], lo=s['lo'], hi=s['hi'],
                     median=pick(0.5), p95=pick(0.95), fmt=fmt_of(col, s['type']))
 
@@ -182,29 +188,22 @@ def _money(v):
 
 # ── row access for the explorer ───────────────────────────────────────────────
 
+def _t(db, tbl):
+    if tbl not in table_names(db): raise KeyError(tbl)
+    return get_db(db).t[tbl]
+
 def page_rows(db, tbl, page=0, sort=None, desc=False):
-    d, cols = get_db(db), _cols(db, tbl)
-    qt = ident(tbl, table_names(db))
-    order = f'order by {ident(sort, cols)} {"desc" if desc else "asc"}' if sort else ''
-    lim, off = cfg.rows_per_page, page * cfg.rows_per_page
-    return d.q(f'select * from {qt} {order} limit :l offset :o', l=lim, o=off)
+    order = f'{ident(sort, _cols(db, tbl))} {"desc" if desc else "asc"}' if sort else None
+    return list(_t(db, tbl).rows_where(order_by=order, limit=cfg.rows_per_page, offset=page * cfg.rows_per_page))
 
 def row_get(db, tbl, pk):
-    r = reflect(db, tbl)
-    if not r.pk: return None
-    d, qt = get_db(db), ident(tbl, table_names(db))
-    qp = ident(r.pk[0], _cols(db, tbl))
-    rows = d.q(f'select * from {qt} where {qp} = :v limit 1', v=pk)
-    return rows[0] if rows else None
+    if not reflect(db, tbl).pk: return None
+    return _t(db, tbl).get(pk, as_cls=False, default=None)
 
-def _child_q(db, parent, child, col, ref_col, pk):
-    ct, cc = ident(child, table_names(db)), ident(col, _cols(db, child))
-    return get_db(db), ct, cc
+def _where(db, child, col): return f'{ident(col, _cols(db, child))} = :v'
 
 def child_count(db, child, col, val):
-    d, ct, cc = _child_q(db, None, child, col, None, val)
-    return d.q(f'select count(*) as n from {ct} where {cc} = :v', v=val)[0]['n']
+    return _t(db, child).count_where(_where(db, child, col), dict(v=val))
 
 def child_rows(db, child, col, val, limit=None):
-    d, ct, cc = _child_q(db, None, child, col, None, val)
-    return d.q(f'select * from {ct} where {cc} = :v limit :l', v=val, l=limit or cfg.rel_preview)
+    return list(_t(db, child).rows_where(_where(db, child, col), dict(v=val), limit=limit or cfg.rel_preview))

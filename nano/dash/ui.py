@@ -1,3 +1,4 @@
+from decimal import Decimal
 from urllib.parse import urlencode, quote
 from fastcore.xml import *
 from fasthtml.common import *
@@ -38,8 +39,9 @@ def dlink(*c, href, **kw):
 def wrap(*content, head=None): return Div(head, *content, cls='dash-wrap')
 
 def _fmt_cell(v, kind='text'):
+    # fastsql hands back the column's declared type, so money arrives as Decimal, not float
     if v is None: return Td('null', cls='null')
-    if kind == 'num': return Td(f'{v:,}' if isinstance(v, int) else f'{v:,.2f}' if isinstance(v, float) else str(v), cls='num')
+    if kind == 'num': return Td(f'{v:,}' if isinstance(v, int) else f'{v:,.2f}' if isinstance(v, (float, Decimal)) else str(v), cls='num')
     s = str(v)
     return Td(s if len(s) <= 60 else s[:57] + '…', title=s if len(s) > 60 else None)
 
