@@ -254,13 +254,17 @@ The blog UI uses a newspaper-style column break layout (`col` break) for post li
 | `Routes.rel` | `/dash/{db}/{table}/{pk}/rel/{child}` (htmx partial) |
 | `Routes.chart` | `/dash/chart.json` (registered first — `/dash/{db}` would otherwise match it) |
 
-**Registering a database.** Only what's in `DBS` (`nano/dash/data.py`) is reachable; this keeps `auth.db` and `blog.db` out of the explorer.
+**Registering a database.** Only what's in `DBS` (`nano/dash/data.py`) is reachable, and within it only the tables `owned()` reports.
 
 ```python
 DBS.mydb = AttrDict(nm='My DB', dump='mydb.sql.gz', about='...')
 ```
 
-`dump` is optional — drop it for a database that already exists at `get_db_pth(<key>)`. Seed dumps live in `nano/dash/seed/` as gzipped SQL, split on a `\n--;--\n` separator and applied with `exec_driver_sql` (data containing `:word` would otherwise be read as bind parameters). Batched multi-row INSERTs keep Chinook to ~68 statements, so seeding works over Turso too.
+`owned()` takes the table list from the dump's `CREATE TABLE` statements, or from an explicit `tables=(...)` on the entry. Everything else — `table_names`, `reflect`, `schema`, `ident` — is scoped to it, which is what keeps `users` and `posts` out of the explorer. That scoping is load-bearing in production, not cosmetic: a Turso URL has no path component, so `database(get_db_pth('chinook'))` and `database(get_db_pth('auth'))` return the *same* remote database. Anything that asks the connection what tables it has gets auth's and blog's too.
+
+`dump` is optional — drop it for a database that already exists at `get_db_pth(<key>)`, but then give the entry a `tables=(...)` list, since there is no dump to derive one from. Seed dumps live in `nano/dash/seed/` as gzipped SQL, split on a `\n--;--\n` separator and applied with `exec_driver_sql` (data containing `:word` would otherwise be read as bind parameters). Batched multi-row INSERTs keep Chinook to ~68 statements.
+
+**Seeding is resumable, and must stay that way.** "The database has tables in it" is not a seed check — under Turso it is always true before dash runs. `seed()` creates missing tables, then fills each table whose row count is 0, one commit per table. A cold start killed part-way through 480 KB of inserts leaves whole tables done and the rest empty, and the next request finishes the job; `INSERT OR IGNORE` means two workers racing the same table converge instead of colliding on a primary key.
 
 **Column roles** (`nano/dash/infer.py`) — assigned from declared type, name, and sampled stats:
 

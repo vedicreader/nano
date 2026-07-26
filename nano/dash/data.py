@@ -1,36 +1,86 @@
-import gzip, hashlib, json
+import gzip, hashlib, json, re
 import sqlalchemy as sa
 from fastcore.all import L, AttrDict, ifnone
 from nano.core.cfg import database, get_db_pth
 from .cfg import cfg
 
-__all__ = ['DBS', 'get_db', 'seed', 'schema', 'table_names', 'reflect', 'profile', 'rowcount', 'qmark', 'ident']
+__all__ = ['DBS', 'get_db', 'seed', 'owned', 'schema', 'table_names', 'reflect', 'profile', 'rowcount', 'qmark', 'ident']
 
-# only databases listed here are reachable from /dash — auth.db and blog.db stay out
+# only databases listed here are reachable from /dash, and only through the tables
+# their own dump defines — see owned()
 DBS = AttrDict(chinook=AttrDict(nm='Chinook', dump='chinook.sql.gz',
                                 about='The classic digital-media store sample: artists, albums, tracks, invoices.'))
 
-_conns, _meta = {}, database(get_db_pth('dash'))
+_conns, _seeded, _owned, _meta = {}, set(), {}, database(get_db_pth('dash'))
 _meta.t.dash_profile.create(k=str, body=str, pk='k', if_not_exists=True)
 _cache = _meta.t.dash_profile
 
 def get_db(nm):
     if nm not in DBS: raise KeyError(nm)
-    if nm not in _conns:
-        _conns[nm] = database(get_db_pth(nm))
-        seed(nm)
+    if nm not in _conns: _conns[nm] = database(get_db_pth(nm))
+    if nm not in _seeded: seed(nm)
     return _conns[nm]
 
+# ── seeding ───────────────────────────────────────────────────────────────────
+
+_CREATE_T = re.compile(r'(?is)^create\s+table(?:\s+if\s+not\s+exists)?\s+[\["`]?([A-Za-z_]\w*)')
+_CREATE_I = re.compile(r'(?is)^create\s+(?:unique\s+)?index(?:\s+if\s+not\s+exists)?\s+.*?\bon\s+[\["`]?([A-Za-z_]\w*)')
+_INSERT   = re.compile(r'(?is)^insert\s+into\s+[\["`]?([A-Za-z_]\w*)')
+_INTO     = re.compile(r'(?is)^insert\s+into\b')
+
+def _dump(nm):
+    'The packaged dump, split into the tables it defines, their rows, and their indexes.'
+    sql = gzip.decompress((cfg.seed_dir / DBS[nm].dump).read_bytes()).decode()
+    d = AttrDict(tables={}, rows={}, indexes=[])
+    for st in filter(None, (s.strip() for s in sql.split('\n--;--\n'))):
+        if m := _CREATE_T.match(st): d.tables[m.group(1)] = st
+        elif m := _INSERT.match(st): d.rows.setdefault(m.group(1), []).append(st)
+        elif _CREATE_I.match(st): d.indexes.append(st)
+        else: raise ValueError(f'{DBS[nm].dump}: unrecognised statement {st[:60]!r}')
+    return d
+
+def owned(nm):
+    '''The tables this database consists of, from its `tables` list or its dump.
+    In production every block shares one Turso database (the libsql URL carries no
+    path, so get_db_pth is ignored), which puts auth and blog tables on the same
+    connection as the sample data. This is what keeps them apart.'''
+    if nm not in _owned:
+        d = DBS[nm]
+        _owned[nm] = tuple(d.tables) if d.get('tables') else tuple(_dump(nm).tables)
+    return _owned[nm]
+
 def seed(nm):
-    'Load the packaged dump once. Batched multi-row INSERTs, so this is ~70 statements, not 15k.'
-    db, dump = _conns[nm], cfg.seed_dir / DBS[nm].dump
-    if db.table_names(): return
-    sql = gzip.decompress(dump.read_bytes()).decode()
-    # exec_driver_sql, not text(): the data contains literals like ':Pines' that
-    # SQLAlchemy would otherwise read as bind parameters
-    for st in filter(None, (s.strip() for s in sql.split('\n--;--\n'))): db.conn.exec_driver_sql(st)
-    db.conn.commit()
-    db.meta.reflect(bind=db.engine)
+    '''Load the packaged dump: ~70 batched multi-row statements, not 15k.
+
+    Resumable and safe to race. A serverless cold start can be cut off part-way
+    through 480KB of inserts over a remote connection, so progress is tracked per
+    table and INSERT OR IGNORE lets a retry — or a second worker — converge instead
+    of erroring on a duplicate key or double-loading a half-filled table.'''
+    if not DBS[nm].get('dump'): _seeded.add(nm); return
+    db, d = _conns[nm], _dump(nm)
+    _owned.setdefault(nm, tuple(d.tables))
+    have = set(sa.inspect(db.engine).get_table_names())
+    made = [t for t in d.tables if t not in have]
+    for t in made: _exec(db, d.tables[t])
+    if made: db.conn.commit()
+    todo = [t for t, n in _counts(db, d.tables).items() if not n and d.rows.get(t)]
+    for t in todo:
+        for st in d.rows[t]: _exec(db, _INTO.sub('INSERT OR IGNORE INTO', st, count=1))
+        db.conn.commit()
+    if made or todo:
+        for st in d.indexes: _exec(db, st)
+        db.conn.commit()
+        db.meta.reflect(bind=db.engine)
+    _seeded.add(nm)
+
+# exec_driver_sql, not text(): the data contains literals like ':Pines' that
+# SQLAlchemy would otherwise read as bind parameters
+def _exec(db, st): db.conn.exec_driver_sql(st)
+
+def _counts(db, tables):
+    'Row counts for every dump table in one round trip — the remote connection makes each one expensive.'
+    sel = ', '.join(f'(select count(*) from {ident(t, tables)}) as {ident(t, tables)}' for t in tables)
+    return db.q(f'select {sel}')[0]
 
 def ident(name, allowed):
     'Quote an identifier, but only after it matches something the schema actually reported.'
@@ -41,12 +91,15 @@ def qmark(db, sql, **params): return db.q(sql, **params)
 
 # ── reflection ────────────────────────────────────────────────────────────────
 
-def table_names(nm): return sorted(sa.inspect(get_db(nm).engine).get_table_names())
+def table_names(nm):
+    'Dump tables that are actually there — the intersection is both the seed check and the boundary.'
+    live = set(sa.inspect(get_db(nm).engine).get_table_names())
+    return sorted(live & set(owned(nm)))
 
 def reflect(nm, tbl):
     'Columns, primary key and foreign keys for one table, straight from the dialect inspector.'
+    if tbl not in table_names(nm): raise KeyError(tbl)
     ins = sa.inspect(get_db(nm).engine)
-    if tbl not in ins.get_table_names(): raise KeyError(tbl)
     cols = [AttrDict(name=c['name'], type=str(c['type']), nullable=c['nullable']) for c in ins.get_columns(tbl)]
     pk = list(ins.get_pk_constraint(tbl).get('constrained_columns') or [])
     fks = [AttrDict(col=f['constrained_columns'][0], ref_table=f['referred_table'], ref_col=f['referred_columns'][0])
