@@ -29,6 +29,7 @@ Each feature is a block: a self-contained module with its own config, routes, an
 ```python
 # nano/app.py
 b.connect(nano)   # blog
+d.connect(nano)   # dashboards
 a.connect(nano)   # auth — always last
 ```
 
@@ -39,6 +40,10 @@ Each block exposes a `connect(app)` function that registers routes, seeds data, 
 **core** handles config and the base UI (navbar, theme switcher, page layouts). Everything else builds on it.
 
 **auth** covers email/password registration with Resend verification, Google OAuth, and GitHub OAuth. One `connect()` call sets up all routes and session middleware. Route paths are overridable via `RouteOverrides`.
+
+**dash** turns a database into a dashboard without being told what's in it. It reflects the schema, profiles every column, works out which ones are dates, measures, categories or foreign keys, and picks the charts that fit — revenue over time, top-N by category, share-of-total doughnuts, histograms with mean and σ. It also ships a table explorer with per-column profiles and a row view that lazily unfolds nested foreign-key relations. The Chinook sample database is seeded on first use.
+
+Routes live under `/dash` and are behind auth by default; set `DASH_PUBLIC=true` to open them up. Only databases listed in `nano/dash/data.py`'s `DBS` registry are reachable — `auth.db` and `blog.db` are not.
 
 **blog** is a full publishing block. Posts are seeded from Markdown files with YAML frontmatter. The list page uses a newspaper-style featured/sidebar/grid layout. Post detail pages support single-column or two-column newspaper layout, set per-post via `layout: newspaper` in the frontmatter. Code blocks never split across columns. To force a column break at a specific point in a post, add:
 
@@ -56,6 +61,7 @@ nano/
 │   ├── app.py           # wire up blocks, scheduled jobs
 │   ├── auth/            # auth block
 │   ├── blog/            # blog block
+│   ├── dash/            # dashboards block
 │   └── core/            # config, UI
 ├── data/
 │   └── db/              # SQLite databases

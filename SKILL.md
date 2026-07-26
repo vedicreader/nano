@@ -38,6 +38,7 @@ Connect order in `nano/app.py` — earlier blocks win on overlapping routes; aut
 
 ```python
 b.connect(nano)   # blog (or any other block)
+d.connect(nano)   # dash
 a.connect(nano)   # auth last — reads the complete RouteOverrides.skip list
 ```
 
@@ -60,7 +61,7 @@ from nano.core import (
     # ui components
     navbar, theme_switcher, mode_switcher, logout, placeholder,
     svg_img, montage, typewriter, email_template, main,
-    themes, github_star,
+    themes, github_star, asset_js, vendor_js,
     Badge, BadgeT, BadgePresetsT, PresetsT,
     # utils
     init_js_then_use, get_usr_ini, loadX, clean_dev, rm_special, arun,
@@ -237,6 +238,67 @@ The blog block seeds posts from markdown files in `nano/blog/posts/`. Each file 
 The `/` route is registered alongside `/blog` — both serve the blog index. `b.connect(app)` calls `seed_posts()` on startup and uses `posts.upsert` so seeding is idempotent.
 
 The blog UI uses a newspaper-style column break layout (`col` break) for post lists.
+
+## Dash block
+
+`from nano import dash as d`. Reflects a database, profiles its columns, and picks charts from what it finds. Nothing is hardcoded to a schema.
+
+**Routes** (from `nano/dash/cfg.py` `Routes`):
+
+| attribute | path |
+|---|---|
+| `Routes.index` | `/dash` |
+| `Routes.db` | `/dash/{db}` |
+| `Routes.table` | `/dash/{db}/{table}` |
+| `Routes.row` | `/dash/{db}/{table}/{pk}` |
+| `Routes.rel` | `/dash/{db}/{table}/{pk}/rel/{child}` (htmx partial) |
+| `Routes.chart` | `/dash/chart.json` (registered first — `/dash/{db}` would otherwise match it) |
+
+**Registering a database.** Only what's in `DBS` (`nano/dash/data.py`) is reachable; this keeps `auth.db` and `blog.db` out of the explorer.
+
+```python
+DBS.mydb = AttrDict(nm='My DB', dump='mydb.sql.gz', about='...')
+```
+
+`dump` is optional — drop it for a database that already exists at `get_db_pth(<key>)`. Seed dumps live in `nano/dash/seed/` as gzipped SQL, split on a `\n--;--\n` separator and applied with `exec_driver_sql` (data containing `:word` would otherwise be read as bind parameters). Batched multi-row INSERTs keep Chinook to ~68 statements, so seeding works over Turso too.
+
+**Column roles** (`nano/dash/infer.py`) — assigned from declared type, name, and sampled stats:
+
+| role | assigned when |
+|---|---|
+| `temporal` | date/time type, or a date-ish name whose min value parses as ISO |
+| `measure` | numeric, non-key, non-zero σ |
+| `dimension` | ≤ `cfg.max_cats` distinct, not mostly null, not effectively unique |
+| `ref` | declared foreign key |
+| `key` / `bool` / `text` / `const` | primary key · two-valued int · high-cardinality text · single-valued |
+
+Chart rules score against these and the best `cfg.max_charts` render, at most 2 per table. Aggregation happens in SQL — no raw rows are pulled into Python. SQLite has no `STDDEV`, so σ comes from `sqrt(avg(x*x) - avg(x)^2)` in a single pass.
+
+**Identifier safety.** `ident(name, allowed)` raises unless `name` matches something the schema inspector reported, then quotes it. Every table and column in a generated query goes through it; values are always bound. `_check()` in `charts.py` validates a whole chart request — including that a join is a *declared* foreign key — before any SQL is built.
+
+**Profiles** are cached in `data/db/dash.db` under a hash of the schema plus row count, so they survive restarts and invalidate when the data changes. Bump `_PROFILE_V` when the stats collected in `_measure` change.
+
+**Config** (`nano/dash/cfg.py`): `public` (`DASH_PUBLIC`, default off), `rows_per_page`, `sample_rows`, `max_cats`, `bar_cats`, `pie_cats`, `top_n`, `hist_bins`, `max_charts`, `rel_preview`.
+
+## Charts
+
+Chart.js 4 is vendored at `static/vendor/chart.umd.min.js` (204 KB raw / 69 KB gzip, no runtime deps) and only loaded on `/dash` routes, via `dash_head()`. `nano/dash/chart.js` wraps it.
+
+Series colours are `--chart-1` … `--chart-8` in `theme.css`. They are **fixed across all 11 themes on purpose**: the hue *order* is what keeps adjacent series apart under protanopia and deuteranopia, so re-tinting per palette would break it. Light and dark are separately selected steps, validated against nano's surface extremes (`#ffffff`, `#2a2520`). Chart chrome — `--chart-grid`, `--chart-axis`, `--chart-tick` — does follow the theme.
+
+Three light-mode slots sit under 3:1 contrast, so every chart ships the relief channel: direct value labels on bars plus a "Show data" table built from the same payload.
+
+Reading a custom property with `getComputedStyle` returns its raw token stream, so `light-dark(...)` comes back unresolved. `chart.js` paints each var onto a throwaway probe element and reads back the computed colour instead. A `MutationObserver` on `documentElement`'s class list repaints every live chart when `setTheme`/`setMode` fires.
+
+Charts fetch their data from `/dash/chart.json` on intersection, so a page of eight charts issues eight small parallel queries rather than one slow render.
+
+## Core additions
+
+```python
+asset_js(path)     # Script tag for a package .js — static/assets when writable, inline when not
+vendor_js(name)    # Script tag for static/vendor/<name>, content-hashed
+RouteOverrides.nav # [(label, href)] — blocks append in connect(); navbar() renders them
+```
 
 ## Deployment
 
