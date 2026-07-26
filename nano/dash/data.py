@@ -1,7 +1,7 @@
 import gzip, hashlib, json, re
 import sqlalchemy as sa
 from fastcore.all import L, AttrDict, ifnone
-from nano.core.cfg import database, get_db_pth
+from nano.core.cfg import database, get_db_pth, scratch_db_dir
 from .cfg import cfg
 
 __all__ = ['DBS', 'get_db', 'seed', 'owned', 'schema', 'table_names', 'reflect', 'profile', 'rowcount', 'qmark', 'ident']
@@ -16,8 +16,12 @@ _meta.t.dash_profile.create(k=str, body=str, pk='k', if_not_exists=True)
 _cache = _meta.t.dash_profile
 
 def get_db(nm):
+    '''`own=True`: a database the explorer reflects gets its own store or none at all.
+    Left to the shared default it would be the app's own database, and /dash would be
+    reflecting auth and blog. Without TURSO_<NM>_URL it falls to a local file, which is
+    the right home for data rebuilt from a packaged dump anyway.'''
     if nm not in DBS: raise KeyError(nm)
-    if nm not in _conns: _conns[nm] = database(get_db_pth(nm))
+    if nm not in _conns: _conns[nm] = database(scratch_db_dir() / f'{nm}.db', own=True)
     if nm not in _seeded: seed(nm)
     return _conns[nm]
 

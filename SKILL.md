@@ -85,8 +85,9 @@ from nano.core import (
 | `TOKEN_EXP` | `tkn_exp` | `691200` | seconds (8 days) |
 | `JWT_SCRT` | `jwt_scrt` | random on startup | set explicitly in production |
 | `RESEND_API_KEY` | `resend_api_key` | `''` | required for email |
-| `TURSO_DATABASE_URL` | `turso_url` | `''` | libsql URL |
-| `TURSO_DATABASE_TURSO_AUTH_TOKEN` | `turso_token` | `''` | auth token |
+| `TURSO_DATABASE_URL` | `turso_url` | `''` | libsql URL; the default store for any database without its own |
+| `TURSO_DATABASE_TURSO_AUTH_TOKEN` | `turso_token` | `''` | auth token for the above |
+| `TURSO_<NM>_URL` · `TURSO_<NM>_AUTH_TOKEN` | — | — | one Turso database for the logical database `<NM>` |
 | `TURSO_SYNC` | `turso_sync` | `0` | `1` = embedded replica mode |
 | `GITHUB_REPO` | `github_repo` | `vedicreader/nano` | shown as star count in navbar |
 
@@ -94,17 +95,24 @@ from nano.core import (
 
 ## Database (Turso)
 
-`database(path)` returns a `fastsql.Database`:
+`database(path, own=False)` returns a `fastsql.Database`. `path`'s stem is the *name* of the logical database, and the name — not the path — is what selects the store in production:
 
 - **Dev** (no Turso env vars): local SQLite file at `path`.
 - **Prod, `TURSO_SYNC=0`** (default): remote Turso connection — no local file.
-- **Prod, `TURSO_SYNC=1`**: embedded replica — syncs the remote into a local file at `path` for low-latency reads.
+- **Prod, `TURSO_SYNC=1`**: embedded replica — syncs that name's remote into a local file at `path`.
 
 ```python
-db = database(get_db_pth('auth'))   # data/db/auth.db locally; Turso in production
+db = database(get_db_pth('auth'))              # data/db/auth.db locally; auth's Turso database in production
+db = database(pth, own=True)                   # never the shared store: its own Turso database, or a local file
 ```
 
-The Vercel serverless filesystem is ephemeral — production persistence must go through Turso. Set `TURSO_DATABASE_URL` and `TURSO_DATABASE_TURSO_AUTH_TOKEN` via the Vercel marketplace integration (they are injected automatically when Turso is attached). Only set `TURSO_SYNC=1` when you need embedded replica mode.
+**A libsql URL has no path component.** `sqlite+libsql://host?secure=true` addresses *the* database, so `database(get_db_pth('auth'))` and `database(get_db_pth('blog'))` return the same one under a single `TURSO_DATABASE_URL`. `turso_target(nm)` resolves per name — `TURSO_<NM>_URL` + `TURSO_<NM>_AUTH_TOKEN` (or `TURSO_<NM>_DATABASE_URL` + `TURSO_<NM>_DATABASE_TURSO_AUTH_TOKEN`, which is how the Vercel integration names a second attached instance), falling back to `TURSO_DATABASE_URL` + `TURSO_DATABASE_TURSO_AUTH_TOKEN`. A URL set without its token raises rather than falling back to the shared credentials, which would authenticate against the wrong database. Two names landing on one host log a warning at startup.
+
+Sharing is fine for the app's own data — auth, blog and dash have distinct table names. It is **not** fine for a database some block reflects, since reflection reports whatever it finds. Those pass `own=True`, which takes the named pair or a local file and never the shared default.
+
+`scratch_db_dir()` is where an `own=True` database with no Turso pair goes: `data/db` normally, the system temp dir when the deployment is read-only. That is the right home for anything rebuildable from a packaged dump — a cold start reloads it locally in well under a second, against 68 round trips to a remote store.
+
+The Vercel serverless filesystem is ephemeral, so anything that must *persist* goes through Turso. Attach it via the Vercel marketplace integration (`TURSO_DATABASE_URL` and `TURSO_DATABASE_TURSO_AUTH_TOKEN` are injected automatically). Only set `TURSO_SYNC=1` when you need embedded replica mode.
 
 ## Paths
 
