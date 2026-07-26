@@ -166,13 +166,14 @@ def db_view(db, fs=()):
 
 # ── /dash/{db}/{table} ────────────────────────────────────────────────────────
 
-def _col_row(db, tbl, name, s):
+def _col_row(db, tbl, name, s, fs=()):
     bits = []
     if s.role in ('measure',):
         bits = [f'min {_n(s.lo)}', f'max {_n(s.hi)}', f'mean {_n(s.mean)}', f'σ {_n(s.sd)}']
     elif s.role == 'temporal': bits = [str(s.get('lo'))[:10], '→', str(s.get('hi'))[:10]]
     elif s.get('maxlen') is not None: bits = [f'max len {s.maxlen}']
-    ref = dlink(f'{s.fk.ref_table}.{s.fk.ref_col}', href=Routes.table.format(db=db, table=quote(s.fk.ref_table))) if s.get('fk') else '—'
+    ref = dlink(f'{s.fk.ref_table}.{s.fk.ref_col}',
+                href=_url(Routes.table.format(db=db, table=quote(s.fk.ref_table)), fs)) if s.get('fk') else '—'
     return Tr(Td(Div(Span(name), Span(s.role, cls='role-chip'), cls='col-head')),
               Td(s.type), Td(f'{s.distinct:,}', cls='num'), Td(f'{s.nulls:,}', cls='num'),
               Td(ref), Td(' '.join(bits)))
@@ -213,7 +214,7 @@ def table_view(db, tbl, page=0, fs=()):
                   cls='flex gap-2'), cls='pager')
     cols_tbl = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(Th('Column'), Th('Type'), Th('Distinct', cls='num'), Th('Nulls', cls='num'), Th('References'), Th('Profile'))),
-        Tbody(*[_col_row(db, tbl, c.name, rl[c.name]) for c in r.cols])))
+        Tbody(*[_col_row(db, tbl, c.name, rl[c.name], fs) for c in r.cols])))
     return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, _url(Routes.db.format(db=db), fs)), (tbl, None)), cls='dash-head'),
                 H1(tbl, cls='m-0'), P(f'{n:,}{f" of {total:,}" if fs else ""} rows · {len(r.cols)} columns · '
                                       f'{len(r.fks)} outbound, {len(schema(db)[tbl].children)} inbound references',
@@ -233,6 +234,21 @@ def _title_for(db, tbl, row):
     lab = label_col(db, tbl, strict=True)
     return str(row.get(lab) or '') if lab else ''
 
+def _row_facet(db, tbl, pk, row, fs):
+    '''The row you are reading, as the filter for everything else.
+
+    Landing on AC/DC's page and wanting the rest of the dashboard to be about AC/DC is the
+    obvious next thought, and until there is a button for it the reader has to go back to a
+    dashboard and rebuild by hand the thing they had already navigated to. Filter by the
+    name if the table has one, since "Artist.Name is AC/DC" is a chip you can read; by the
+    key otherwise, which at least still selects the right row.'''
+    lab = label_col(db, tbl, strict=True)
+    col = lab if lab and row.get(lab) is not None else (reflect(db, tbl).pk[0] if reflect(db, tbl).pk else None)
+    if not col or row.get(col) is None: return None
+    return dlink(lc_icon('funnel', 14), Span(f'Filter dashboard to this {_h(tbl).lower()}'),
+                 href=_plus(Routes.db.format(db=db), fs, tbl, col, row[col]),
+                 cls=f'{ButtonT.default} {ButtonT.xs} filt-to')
+
 def row_view(db, tbl, pk, row, fs=()):
     'One row is already a filter of one, so nothing here is filtered — the links just carry it onward.'
     r, rl = reflect(db, tbl), roles(db, tbl)
@@ -250,22 +266,24 @@ def row_view(db, tbl, pk, row, fs=()):
     kids = schema(db)[tbl].children
     return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, _url(Routes.db.format(db=db), fs)),
                            (tbl, _url(Routes.table.format(db=db, table=quote(tbl)), fs)), (str(pk), None)), cls='dash-head'),
-                H1(_title_for(db, tbl, row) or f'{tbl} {pk}', cls='m-0'),
+                Div(H1(_title_for(db, tbl, row) or f'{tbl} {pk}', cls='m-0'),
+                    _row_facet(db, tbl, pk, row, fs), cls='row-head'),
                 P(f'{tbl} · {r.pk[0] if r.pk else "row"} {pk}', cls='chart-why mb-4'),
                 Dl(*fields, cls='field-grid'),
                 H2('Related', cls='mt-6 mb-2') if kids else None,
-                Div(*[_rel_node(db, tbl, pk, k, 0) for k in kids], cls='rel-tree') if kids else None)
+                Div(*[_rel_node(db, tbl, pk, k, 0, fs) for k in kids], cls='rel-tree') if kids else None)
 
-def _rel_node(db, parent, pk, kid, depth):
+def _rel_node(db, parent, pk, kid, depth, fs=()):
     n = child_count(db, kid.table, kid.col, pk)
-    url = Routes.rel.format(db=db, table=quote(parent), pk=quote(str(pk)), child=quote(kid.table)) + f'?col={quote(kid.col)}&depth={depth}'
+    url = _url(Routes.rel.format(db=db, table=quote(parent), pk=quote(str(pk)), child=quote(kid.table)), fs,
+               col=kid.col, depth=depth)
     return Details(Summary(lc_icon('table-2', 14), Span(f'{kid.table}'),
                            Span(f'via {kid.col}', cls='role-chip'), Span(f'{n:,}', cls='rel-count')),
                    Div(Div('Loading…', cls='chart-skel'), cls='rel-body',
                        hx_get=url, hx_trigger='toggle once from:closest details', hx_swap='innerHTML'),
                    cls='rel-node')
 
-def rel_view(db, child, col, val, depth=0):
+def rel_view(db, child, col, val, depth=0, fs=()):
     'One nesting level: the child rows, each able to open its own children.'
     r = reflect(db, child)
     rows = child_rows(db, child, col, val, limit=cfg.rel_preview)
@@ -278,16 +296,18 @@ def rel_view(db, child, col, val, depth=0):
         for c in r.cols:
             v = row[c.name]
             f = r.fk_by_col.get(c.name)
-            if f and v is not None: tds.append(Td(dlink(str(v), href=_pk_href(db, f.ref_table, v)), cls='num'))
-            elif c.name == pk and v is not None: tds.append(Td(dlink(str(v), href=_pk_href(db, child, v)), cls='num'))
+            if f and v is not None: tds.append(Td(dlink(str(v), href=_url(_pk_href(db, f.ref_table, v), fs)), cls='num'))
+            elif c.name == pk and v is not None: tds.append(Td(dlink(str(v), href=_url(_pk_href(db, child, v), fs)), cls='num'))
             else: tds.append(_fmt_cell(v, kinds[c.name]))
         body.append(Tr(*tds))
     tbl = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(*[Th(c.name) for c in r.cols])), Tbody(*body)))
-    more = None
-    if n > len(rows):
-        more = P(dlink(f'View all {n:,} in {child} →', href=Routes.table.format(db=db, table=quote(child))),
-                 cls='chart-why mt-2')
+    # "View all 10" has to land on ten rows. The relation that produced this preview *is* a
+    # filter — child.col = val — so the link carries it rather than dropping the reader on
+    # the unfiltered table and making them rebuild by hand what they had just navigated to
+    more = P(dlink(f'View all {n:,} in {child} →', href=_plus(Routes.table.format(db=db, table=quote(child)),
+                                                             fs, child, col, val)),
+             cls='chart-why mt-2') if n else None
     # one level of inline nesting, then the row page takes over — otherwise a deep
     # schema would try to open the whole database in one response
     deeper = None
@@ -295,5 +315,5 @@ def rel_view(db, child, col, val, depth=0):
         kids = schema(db)[child].children
         if kids and rows:
             deeper = Div(P(f'Inside {child} {rows[0][pk]}', cls='chart-why mt-3'),
-                         Div(*[_rel_node(db, child, rows[0][pk], k, depth + 1) for k in kids], cls='rel-tree'))
+                         Div(*[_rel_node(db, child, rows[0][pk], k, depth + 1, fs) for k in kids], cls='rel-tree'))
     return Div(tbl, more, deeper)

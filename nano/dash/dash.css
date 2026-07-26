@@ -82,6 +82,8 @@
 .filt-add select, .filt-add input { font-size: var(--text-8); padding: 0.2rem 0.4rem; margin: 0; width: 10rem; }
 .filt-add select[name="fop"] { width: 7.5rem; }
 .filt-off { color: var(--chart-2); }
+.row-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.filt-to { display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; }
 .filt-of { display: block; font-size: 0.625rem; color: var(--muted-foreground); font-weight: 400; }
 table.dash-tbl a.filt-cell { color: inherit; text-decoration-line: underline; text-decoration-style: dotted;
                              text-underline-offset: 0.2em; text-decoration-color: var(--chart-grid); }

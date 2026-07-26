@@ -58,7 +58,7 @@ def dash_rel(req, db: str, table: str, pk: str, child: str, col: str = '', depth
     'htmx partial: one level of children, loaded when the reader opens the section.'
     if not _known(db, child): return not_found()
     if col not in reflect(db, child).fk_by_col: return Div('Not a foreign key', cls='chart-why')
-    return rel_view(db, child, col, pk, depth=min(int(depth), 2))
+    return rel_view(db, child, col, pk, depth=min(int(depth), 2), fs=_fs(req, db))
 
 def dash_chart(req):
     # dict() over the query params keeps only the last value of a repeated key, and `f` is
