@@ -1,7 +1,7 @@
 from fasthtml.common import *
 from fasthtml.common import Meta, Favicon, Socials, Link, serve, Script, JSONResponse, Div, P
 from .core import *
-from nano import auth as a, blog as b
+from nano import auth as a, blog as b, dash as d
 
 __all__ = ['launch', 'nano']
 
@@ -36,6 +36,7 @@ for _d in ('vendor', 'assets'):
         nano.router.routes.insert(0, Mount(f'/static/{_d}', app=StaticImmutable(directory=f'static/{_d}'), name=f'static_{_d}'))
 
 b.connect(nano)
+d.connect(nano) # dashboards
 a.connect(nano) # auth needs to be the last to connect. it reads RouteOverrides skip list to skip auth
 
 def showcase(auth):

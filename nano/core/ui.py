@@ -14,7 +14,7 @@ __all__ = ['landing', 'welcome_page', 'placeholder', 'navbar', 'theme_switcher',
            'svg_img', 'montage', 'typewriter', 'base', 'Badge', 'BadgeT', 'BadgePresetsT', 'PresetsT',
            'welcome', 'not_found', 'email_template', 'main', 'themes', 'github_star', 'stringify',
            'ButtonT', 'TextT', 'ThemeRadii', 'ThemeShadows', 'ThemeFont', 'NavBarT', 'THEMES',
-           'LabelInput', 'LabelTextArea', 'LabelSelect', 'modal', 'CmdPalette']
+           'LabelInput', 'LabelTextArea', 'LabelSelect', 'modal', 'CmdPalette', 'asset_js', 'vendor_js']
 
 def stringify(o):
     'Join class fragments (str | list | tuple, arbitrarily nested) into one class string.'
@@ -132,13 +132,17 @@ class NavBarT:
     glass = 'navbar navbar-glass'
     shining = 'navbar navbar-shining'
 
+def nav_links():
+    if not r.nav: return None
+    return Div(*[A(t, href=h, cls='text-sm hover-dim') for t, h in r.nav], cls='flex items-center gap-4')
+
 def navbar(usr=None, title='', style=NavBarT.default, cls='w-full sticky', mobile_cls=''):
     usr_ok = bool(usr)
     inc_fnt_sz, inc_mode_sw, inc_th_sw, inc_avtr = True, True, not_prod(), usr_ok
     sep = Div('|', cls='text-light text-xl px-2')
     cmps = [(font_size_switcher(), inc_fnt_sz), (mode_switcher(), inc_mode_sw), (theme_switcher(), inc_th_sw),
             (sep, True), (github_star(), True), (logout(usr), inc_avtr), (login(), not inc_avtr)]
-    lft = A(H4(title, cls='m-0'), href='/')
+    lft = Div(A(H4(title, cls='m-0'), href='/'), nav_links(), cls='flex items-center gap-4')
     rgt = Div(*[c for c, inc in cmps if inc], cls='flex items-center gap-1')
     return Div(Nav(lft, rgt, cls=mobile_cls), cls=[style, cls])
 
@@ -251,6 +255,14 @@ def _asset(nm, content):
         if not p.exists() or p.read_text() != content: p.write_text(content)
         return p
     except OSError: return None
+
+def asset_js(path, **kw):
+    'Script tag for a package .js file — served from static/assets when writable, inlined when not.'
+    p = Path(path)
+    c = loadX(p)
+    return Script(src=_vlink(f'/static/assets/{p.name}'), **kw) if _asset(p.name, c) else Script(c, **kw)
+
+def vendor_js(nm, **kw): return Script(src=_vlink(f'/static/vendor/{nm}'), **kw)
 
 @timed_cache(seconds=3600)
 def themes(color='paper', radii=ThemeRadii.md, shadows=ThemeShadows.sm, font=ThemeFont.default):
