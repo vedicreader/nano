@@ -107,6 +107,19 @@
     },
   };
 
+  // Clicking a category is the shortest route to "only AC/DC": the mark already names the
+  // thing, so the click adds the filter the reader would otherwise have had to spell out.
+  // The raw group key travels in spec.keys — spec.labels is clipped for the axis.
+  function drill(spec, i) {
+    const on = spec.on, k = spec.keys && spec.keys[i];
+    if (!on || k == null) return;
+    const u = new URL(window.location.href);
+    const v = [on.t, on.c, on.op || 'eq', k].join(':');
+    if (!u.searchParams.getAll('f').includes(v)) u.searchParams.append('f', v);
+    u.searchParams.delete('page');   // page 3 of the old result set means nothing in the new one
+    window.location.href = u.toString();
+  }
+
   function build(spec, pal) {
     const kind = spec.kind;
     const bar = kind === 'bar' || kind === 'hbar';
@@ -157,6 +170,8 @@
         animation: reduced() ? false : { duration: 320 },
         layout: { padding: { top: 4, right: 4 } },
         interaction: line ? { mode: 'index', intersect: false } : { mode: 'nearest', intersect: true },
+        onClick: (e, els) => { if (els.length) drill(spec, els[0].index); },
+        onHover: (e, els, ch) => { ch.canvas.style.cursor = (spec.on && els.length) ? 'pointer' : 'default'; },
         scales: round ? {} : {
           x: kind === 'hbar' ? axis(true) : axis(false),
           y: kind === 'hbar' ? axis(false) : axis(true),
@@ -200,6 +215,16 @@
       '</tbody>';
   }
 
+  // a cursor change is only discoverable once you are already hovering the right thing
+  function hint(canvas, spec) {
+    const foot = canvas.closest('.chart-card')?.querySelector('.chart-foot');
+    if (!foot) return;
+    let el = foot.querySelector('.chart-hint');
+    if (!spec.on) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('span'); el.className = 'chart-hint'; foot.appendChild(el); }
+    el.textContent = 'Click to filter';
+  }
+
   function meta(spec, pal) {
     const bars = spec.kind === 'bar' || spec.kind === 'hbar';
     return { fmt: spec.fmt, series: spec.series.length, pal,
@@ -220,6 +245,7 @@
     canvas.$spec = spec;
     legend(canvas, spec, pal);
     dataTable(canvas, spec);
+    hint(canvas, spec);
   }
 
   function load(canvas) {

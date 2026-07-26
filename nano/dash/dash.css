@@ -55,6 +55,37 @@
 .chart-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
 .chart-legend i { width: 0.6rem; height: 0.6rem; border-radius: 2px; display: inline-block; }
 .chart-skel { display: grid; place-items: center; height: 100%; color: var(--muted-foreground); font-size: var(--text-8); }
+.chart-hint { font-size: var(--text-8); color: var(--muted-foreground); opacity: 0.75; white-space: nowrap; margin-inline-start: auto; }
+
+/* ── Filters ──────────────────────────────────────────────────────────────────
+   The bar sits between the page heading and everything it changes, so what is
+   being excluded is readable without scrolling back to find out. */
+.filt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem;
+            background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-medium);
+            padding: 0.5rem 0.75rem; margin-block-end: 1.25rem; }
+.filt-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; min-width: 0; flex: 1 1 auto; }
+.filt-lbl { font-size: var(--text-8); color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.06em; }
+.filt-none { font-size: var(--text-8); color: var(--muted-foreground); font-style: italic; }
+.filt-chip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--text-8);
+             background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-small);
+             padding: 0.1rem 0.2rem 0.1rem 0.45rem; max-width: 22rem; }
+.filt-chip > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filt-chip .filt-x { color: var(--muted-foreground); text-decoration: none; line-height: 1;
+                     padding: 0 0.25rem; border-radius: var(--radius-small); }
+.filt-chip .filt-x:hover { color: var(--foreground); background: color-mix(in srgb, var(--border) 60%, transparent); }
+.filt-clear { font-size: var(--text-8); color: var(--muted-foreground); margin-inline-start: 0.25rem; }
+.filt-add { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.35rem; margin: 0; }
+.filt-in { display: contents; }
+/* fixed widths, not max-widths: a <select> is as wide as its widest option, and a column
+   list from a whole schema would otherwise set the form's intrinsic width to something
+   absurd and make flexbox wrap it even where it fits */
+.filt-add select, .filt-add input { font-size: var(--text-8); padding: 0.2rem 0.4rem; margin: 0; width: 10rem; }
+.filt-add select[name="fop"] { width: 7.5rem; }
+.filt-off { color: var(--chart-2); }
+.filt-of { display: block; font-size: 0.625rem; color: var(--muted-foreground); font-weight: 400; }
+table.dash-tbl a.filt-cell { color: inherit; text-decoration-line: underline; text-decoration-style: dotted;
+                             text-underline-offset: 0.2em; text-decoration-color: var(--chart-grid); }
+table.dash-tbl a.filt-cell:hover { color: var(--primary); text-decoration-style: solid; }
 
 /* relief channel for the sub-3:1 light-mode slots: every chart can show its numbers */
 details.chart-data { margin-block-start: 0.5rem; }

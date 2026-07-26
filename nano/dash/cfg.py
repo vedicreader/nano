@@ -10,6 +10,7 @@ class Routes:
     row   = '/dash/{db}/{table}/{pk}'
     rel   = '/dash/{db}/{table}/{pk}/rel/{child}'
     chart = '/dash/chart.json'
+    fopts = '/dash/filter.opts'
     skip  = ['/dash', r'/dash/.*']
 
 # public=False keeps /dash behind the auth middleware; DASH_PUBLIC=true opens it up
@@ -25,4 +26,7 @@ cfg = AttrDict(
     hist_bins    = 24,
     max_charts   = 8,
     rel_preview  = 5,       # child rows shown per nested relation before "view all"
+    max_filters  = 8,       # active filters per request — bounds the SQL a URL can ask for
+    max_hops     = 6,       # foreign keys a filter may be routed through to reach another table
+    filter_values= 500,     # distinct values above which a filter is typed, not picked from a list
 )

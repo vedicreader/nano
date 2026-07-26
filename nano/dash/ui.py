@@ -7,9 +7,10 @@ from nano.core import lc_icon, TextT, ButtonT, PresetsT, asset_js, asset_css, ve
 from .cfg import Routes, cfg
 from .data import DBS, schema, reflect, profile, table_names, rowcount
 from .infer import roles, specs_for_db, specs_for_table, label_col, fmt_of, _h
-from .charts import stats, sparkline, page_rows, row_get, child_rows, child_count, headline
+from .charts import stats, sparkline, page_rows, row_get, child_rows, child_count, headline, count_rows
+from .filters import SEP, wire, describe, applies, columns, ops_for, values_for
 
-__all__ = ['dash_head', 'index_view', 'db_view', 'table_view', 'row_view', 'rel_view']
+__all__ = ['dash_head', 'index_view', 'db_view', 'table_view', 'row_view', 'rel_view', 'filt_input']
 
 @timed_cache(seconds=3600)
 def dash_head():
@@ -47,6 +48,58 @@ def _fmt_cell(v, kind='text'):
 
 def _pk_href(db, tbl, pk): return Routes.row.format(db=db, table=quote(tbl), pk=quote(str(pk)))
 
+# ── filters ───────────────────────────────────────────────────────────────────
+
+def _url(path, fs=(), **kw):
+    'A dashboard URL carrying the active filter. Every in-dash link goes through here, so a facet survives navigation.'
+    q = [('f', wire(f)) for f in fs] + [(k, v) for k, v in kw.items() if v]
+    return path + ('?' + urlencode(q) if q else '')
+
+def _plus(path, fs, t, c, v, op='eq'):
+    'The same page with one filter more — what a value in a table links to.'
+    q, nf = [('f', wire(f)) for f in fs], SEP.join((t, c, op, str(v)))
+    if nf not in [x[1] for x in q]: q.append(('f', nf))
+    return path + '?' + urlencode(q)
+
+def filt_chip(path, fs, i, tbl=None):
+    txt = describe(fs[i], tbl)
+    return Span(Span(txt), dlink('×', href=_url(path, [g for j, g in enumerate(fs) if j != i]),
+                                 cls='filt-x', aria_label=f'Remove filter: {txt}'), cls='filt-chip')
+
+def filt_input(db, fc, sel_op=None):
+    '''The operator and value controls for one column — swapped in when the column changes.
+    A column with few enough distinct values is a list to pick from rather than a box to
+    type in: "AC/DC" is only findable if the spelling is not yours to guess.'''
+    t, c = (fc.split(SEP, 1) + [''])[:2] if fc and SEP in fc else (None, None)
+    if not t or t not in table_names(db) or c not in {x.name for x in reflect(db, t).cols}:
+        return Select(Option('is', value='eq'), name='fop', aria_label='Condition'), Input(name='fv', aria_label='Value')
+    kind = profile(db, t)['cols'][c]['kind']
+    ops = ops_for(kind) or [('eq', 'is')]
+    vals = values_for(db, t, c)
+    val = (Select(Option('', value=''), *[Option(str(v), value=str(v)) for v in vals], name='fv', aria_label='Value')
+           if vals is not None else
+           Input(name='fv', aria_label='Value', type='number' if kind == 'num' else 'text',
+                 step='any' if kind == 'num' else None, placeholder='value'))
+    return (Select(*[Option(l, value=k, selected=(k == sel_op)) for k, l in ops], name='fop', aria_label='Condition'), val)
+
+def filter_bar(db, path, fs, tbl=None):
+    'Active filters as removable chips, plus the one form that adds another.'
+    cols = columns(db, tbl)
+    first = f'{cols[0][0]}{SEP}{cols[0][1][0][0]}' if cols and cols[0][1] else ''
+    sel = Select(*[Optgroup(*[Option(f'{c} · {role}', value=f'{t}{SEP}{c}') for c, role, _ in cs], label=t)
+                   for t, cs in cols],
+                 name='fc', aria_label='Column', hx_get=f'{Routes.fopts}?db={db}',
+                 hx_target='#filt-in', hx_swap='innerHTML', hx_trigger='change')
+    add = Form(*[Input(type='hidden', name='f', value=wire(f)) for f in fs], sel,
+               Div(*filt_input(db, first), id='filt-in', cls='filt-in'),
+               Button('Add', type='submit', cls=f'{ButtonT.default} {ButtonT.xs}'),
+               method='get', action=path, cls='filt-add', hx_boost='false')
+    chips = [filt_chip(path, fs, i, tbl) for i in range(len(fs))]
+    return Div(Div(Span('Filter', cls='filt-lbl'),
+                   *(chips or [Span('everything', cls='filt-none')]),
+                   dlink('Clear all', href=path, cls='filt-clear') if fs else None, cls='filt-chips'),
+               add, cls='filt-bar')
+
 # ── /dash ─────────────────────────────────────────────────────────────────────
 
 def index_view():
@@ -70,9 +123,15 @@ def tile(t):
                Div(t.sub, cls='tile-sub') if t.get('sub') else None,
                sparkline(t.spark) if t.get('spark') else None, cls='tile')
 
-def chart_card(spec, wide=False):
-    src = f'/dash/chart.json?{urlencode(spec.qs)}'
-    return Div(Header(H3(spec.title), P(spec.why, cls='chart-why')),
+def chart_card(spec, wide=False, fs=()):
+    # a chart drawn from a table the filter cannot reach says so; quietly showing everything
+    # next to charts that did filter is the one outcome that would be read as data
+    on = [f for f in fs if applies(spec.db, spec.t, f)]
+    off = [f for f in fs if f not in on]
+    src = f'{Routes.chart}?{urlencode({**spec.qs, "f": [wire(f) for f in on]}, doseq=True)}'
+    return Div(Header(H3(spec.title), P(spec.why, cls='chart-why'),
+                      P(f'Unfiltered — {_h(spec.t)} has no relation to '
+                        + ', '.join(sorted({f.t for f in off})), cls='chart-why filt-off') if off else None),
                Div(Div('Loading…', cls='chart-skel'),
                    Canvas(data_chart_src=src), cls=f'chart-box{" tall" if spec.kind == "hbar" else ""}'),
                Div(Div(cls='chart-legend'), cls='chart-foot'),
@@ -81,19 +140,27 @@ def chart_card(spec, wide=False):
                Details(Summary('Show data'), Div(cls='tbl-scroll')(Table(cls='dash-tbl')), cls='chart-data'),
                cls=f'chart-card{" wide" if wide else ""}')
 
-def db_view(db):
-    sch, specs = schema(db), specs_for_db(db)
-    tiles = Div(*[tile(t) for t in headline(db)], cls='tile-grid')
-    charts = Div(*[chart_card(s, wide=(s.kind == 'area' or s.kind == 'line')) for s in specs], cls='chart-grid')
+def _rows_cell(db, t, fs):
+    'How far the filter reached into this table — the honest answer is per table, not per dashboard.'
+    n = count_rows(db, t, fs)
+    off = fs and not any(applies(db, t, f) for f in fs)
+    return Td(f'{n:,}', Span('unfiltered' if off else f'of {rowcount(db, t):,}', cls='filt-of') if fs else None,
+              cls='num')
+
+def db_view(db, fs=()):
+    sch, specs, path = schema(db), specs_for_db(db), Routes.db.format(db=db)
+    tiles = Div(*[tile(t) for t in headline(db, fs)], cls='tile-grid')
+    charts = Div(*[chart_card(s, wide=(s.kind == 'area' or s.kind == 'line'), fs=fs) for s in specs], cls='chart-grid')
     tbls = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(Th('Table'), Th('Rows', cls='num'), Th('Columns'), Th('References'), Th('Referenced by'))),
-        Tbody(*[Tr(Td(dlink(t, href=Routes.table.format(db=db, table=quote(t)))),
-                   Td(f'{rowcount(db, t):,}', cls='num'), Td(str(len(sch[t].cols))),
+        Tbody(*[Tr(Td(dlink(t, href=_url(Routes.table.format(db=db, table=quote(t)), fs))),
+                   _rows_cell(db, t, fs), Td(str(len(sch[t].cols))),
                    Td(', '.join(f.ref_table for f in sch[t].fks) or '—'),
                    Td(', '.join(c.table for c in sch[t].children) or '—'))
                 for t in sch])))
     return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, None)), cls='dash-head'),
                 H1(DBS[db].nm, cls='m-0'), P(DBS[db].about, cls='chart-why mb-4'),
+                filter_bar(db, path, fs),
                 tiles, charts,
                 H2('Tables', cls='mt-6 mb-2'), tbls)
 
@@ -115,10 +182,12 @@ def _n(v):
     if isinstance(v, float): return f'{v:,.2f}'
     return f'{v:,}' if isinstance(v, int) else str(v)
 
-def table_view(db, tbl, page=0):
+def table_view(db, tbl, page=0, fs=()):
     r, rl = reflect(db, tbl), roles(db, tbl)
-    n = rowcount(db, tbl)
-    rows = page_rows(db, tbl, page)
+    path, total = Routes.table.format(db=db, table=quote(tbl)), rowcount(db, tbl)
+    n = count_rows(db, tbl, fs)
+    page = min(page, max(0, (n - 1) // cfg.rows_per_page))   # a filter can strand you past the last page
+    rows = page_rows(db, tbl, page, fs)
     kinds = {c.name: rl[c.name].kind for c in r.cols}
     pk = r.pk[0] if r.pk else None
     specs = specs_for_table(db, tbl, limit=4)
@@ -128,23 +197,29 @@ def table_view(db, tbl, page=0):
         for c in r.cols:
             v, td = row[c.name], _fmt_cell(row[c.name], kinds[c.name])
             f = r.fk_by_col.get(c.name)
-            if f and v is not None: td = Td(dlink(str(v), href=_pk_href(db, f.ref_table, v)), cls='num')
-            elif c.name == pk and v is not None: td = Td(dlink(str(v), href=_pk_href(db, tbl, v)), cls='num')
+            if f and v is not None: td = Td(dlink(str(v), href=_url(_pk_href(db, f.ref_table, v), fs)), cls='num')
+            elif c.name == pk and v is not None: td = Td(dlink(str(v), href=_url(_pk_href(db, tbl, v), fs)), cls='num')
+            # a category is a column whose values repeat, which is the same thing as saying
+            # its cells are worth clicking; a track title is not
+            elif rl[c.name].role in ('dimension', 'bool') and v is not None:
+                td = Td(dlink(str(v), href=_plus(path, fs, tbl, c.name, v), cls='filt-cell',
+                              title=f'Filter to {c.name} = {v}'))
             tds.append(td)
         body.append(Tr(*tds))
     pages = (n + cfg.rows_per_page - 1) // cfg.rows_per_page
-    nav = Div(Span(f'Rows {page * cfg.rows_per_page + 1:,}–{min(n, (page + 1) * cfg.rows_per_page):,} of {n:,}'),
-              Div(dlink('← Prev', href=f'?page={page - 1}', cls=f'{ButtonT.default} {ButtonT.xs}') if page else None,
-                  dlink('Next →', href=f'?page={page + 1}', cls=f'{ButtonT.default} {ButtonT.xs}') if page + 1 < pages else None,
+    nav = Div(Span(f'Rows {min(n, page * cfg.rows_per_page + 1):,}–{min(n, (page + 1) * cfg.rows_per_page):,} of {n:,}'),
+              Div(dlink('← Prev', href=_url(path, fs, page=page - 1), cls=f'{ButtonT.default} {ButtonT.xs}') if page else None,
+                  dlink('Next →', href=_url(path, fs, page=page + 1), cls=f'{ButtonT.default} {ButtonT.xs}') if page + 1 < pages else None,
                   cls='flex gap-2'), cls='pager')
     cols_tbl = Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
         Thead(Tr(Th('Column'), Th('Type'), Th('Distinct', cls='num'), Th('Nulls', cls='num'), Th('References'), Th('Profile'))),
         Tbody(*[_col_row(db, tbl, c.name, rl[c.name]) for c in r.cols])))
-    return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, Routes.db.format(db=db)), (tbl, None)), cls='dash-head'),
-                H1(tbl, cls='m-0'), P(f'{n:,} rows · {len(r.cols)} columns · '
+    return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, _url(Routes.db.format(db=db), fs)), (tbl, None)), cls='dash-head'),
+                H1(tbl, cls='m-0'), P(f'{n:,}{f" of {total:,}" if fs else ""} rows · {len(r.cols)} columns · '
                                       f'{len(r.fks)} outbound, {len(schema(db)[tbl].children)} inbound references',
                                       cls='chart-why mb-4'),
-                Div(*[chart_card(s) for s in specs], cls='chart-grid mb-6') if specs else None,
+                filter_bar(db, path, fs, tbl),
+                Div(*[chart_card(s, fs=fs) for s in specs], cls='chart-grid mb-6') if specs else None,
                 H2('Columns', cls='mt-6 mb-2'), cols_tbl,
                 H2('Rows', cls='mt-6 mb-2'),
                 Div(cls='tbl-scroll')(Table(cls='dash-tbl')(
@@ -158,7 +233,8 @@ def _title_for(db, tbl, row):
     lab = label_col(db, tbl, strict=True)
     return str(row.get(lab) or '') if lab else ''
 
-def row_view(db, tbl, pk, row):
+def row_view(db, tbl, pk, row, fs=()):
+    'One row is already a filter of one, so nothing here is filtered — the links just carry it onward.'
     r, rl = reflect(db, tbl), roles(db, tbl)
     fields = []
     for c in r.cols:
@@ -167,13 +243,13 @@ def row_view(db, tbl, pk, row):
         if f and v is not None:
             parent = row_get(db, f.ref_table, v)
             lab = _title_for(db, f.ref_table, parent) if parent else None
-            dd = dlink(lab or str(v), href=_pk_href(db, f.ref_table, v))
+            dd = dlink(lab or str(v), href=_url(_pk_href(db, f.ref_table, v), fs))
         else:
             dd = 'null' if v is None else str(v)
         fields.append(Div(Dt(c.name), Dd(dd), cls='field'))
     kids = schema(db)[tbl].children
-    return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, Routes.db.format(db=db)),
-                           (tbl, Routes.table.format(db=db, table=quote(tbl))), (str(pk), None)), cls='dash-head'),
+    return wrap(Div(crumbs(('Dashboards', Routes.index), (DBS[db].nm, _url(Routes.db.format(db=db), fs)),
+                           (tbl, _url(Routes.table.format(db=db, table=quote(tbl)), fs)), (str(pk), None)), cls='dash-head'),
                 H1(_title_for(db, tbl, row) or f'{tbl} {pk}', cls='m-0'),
                 P(f'{tbl} · {r.pk[0] if r.pk else "row"} {pk}', cls='chart-why mb-4'),
                 Dl(*fields, cls='field-grid'),
