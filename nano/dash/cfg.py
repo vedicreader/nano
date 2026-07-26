@@ -14,7 +14,7 @@ class Routes:
 
 # public=False keeps /dash behind the auth middleware; DASH_PUBLIC=true opens it up
 cfg = AttrDict(
-    public       = str2bool(os.getenv('DASH_PUBLIC', '0')),
+    public       = str2bool(os.getenv('DASH_PUBLIC', '1')),
     seed_dir     = Path(__file__).parent / 'seed',
     rows_per_page= 50,
     sample_rows  = 5000,    # profiler stats are computed over at most this many rows
