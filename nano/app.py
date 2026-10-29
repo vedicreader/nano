@@ -35,6 +35,9 @@ nano, rt = fast_app(hdrs=hdrs, bodykw=kw, live=not_prod(), title=cfg.app_nm, ext
 
 # serve versioned css/js (vurl ?v= links) immutable, ahead of the default static route
 from starlette.routing import Mount
+from starlette.staticfiles import StaticFiles
+nano.router.routes[:] = [r for r in nano.router.routes if getattr(r, 'path', '') != '/{fname:path}.{ext:static}']   # fast_app's catch-all served any file under the app root, and beyond it through an encoded ../
+if Path('static').is_dir(): nano.router.routes.insert(0, Mount('/static', app=StaticFiles(directory='static'), name='static'))   # favicons, blog images, svg: the files a page links, and nothing outside static/
 for _d in ('vendor', 'assets'):
     if (Path('static')/_d).is_dir():
         nano.router.routes.insert(0, Mount(f'/static/{_d}', app=StaticImmutable(directory=f'static/{_d}'), name=f'static_{_d}'))
